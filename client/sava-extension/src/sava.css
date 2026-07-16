@@ -103,6 +103,7 @@
 
 .sava-avatar i {
     color: var(--sava-accent-text);
+    font-size: 18px;
 }
 
 /* Bubbles */
@@ -114,8 +115,9 @@
 }
 
 .sava-bubble--user {
-    background: var(--sava-accent);
-    color: var(--sava-accent-text);
+    background: var(--sava-surface);
+    color: var(--sava-text);
+    border: 1px solid var(--sava-line);
     border-bottom-right-radius: 4px;
 }
 
@@ -203,8 +205,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 30px;
     margin-bottom: 18px;
+}
+
+.sava-empty__mark i {
+    color: var(--sava-accent-text);
+    font-size: 30px;
 }
 
 .sava-empty__title {
@@ -254,10 +260,11 @@
     margin: 0 auto 16px auto;
     width: 100%;
     box-sizing: border-box;
+    align-items: center;
     background: var(--sava-surface);
     border: 1px solid var(--sava-line);
     border-radius: 24px;
-    padding: 2px 6px 2px 16px;
+    padding: 2px 8px 2px 16px;
 }
 
 .sava-root .cs-message-input__content-editor-container,
@@ -279,13 +286,19 @@
 
 .sava-root .cs-button--send {
     color: var(--sava-accent);
+    align-self: center;
 }
 
 /* ---- typing indicator ----------------------------------------------- */
 .sava-root .cs-typing-indicator {
     background: var(--sava-canvas);
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: 100%;
     max-width: var(--sava-column);
-    margin: 0 auto;
+    padding-left: 40px;
+    box-sizing: border-box;
 }
 
 .sava-root .cs-typing-indicator__text {

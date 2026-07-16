@@ -120,7 +120,7 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
                     >
                         {isEmpty ? (
                             <div className="sava-empty">
-                                <div className="sava-empty__mark"><i className="icon--general-ai" /></div>
+                                <div className="sava-empty__mark"><i className="big-icon--general-ai" /></div>
                                 <h1 className="sava-empty__title">{gettext('What would you like to do?')}</h1>
                                 <p className="sava-empty__subtitle">
                                     {gettext('Describe it in plain language and SAVA will do it for you.')}
@@ -143,7 +143,7 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
                                     </div>
                                 ) : (
                                     <div className="sava-row sava-row--assistant" key={m.id}>
-                                        <div className="sava-avatar"><i className="icon--general-ai" /></div>
+                                        <div className="sava-avatar"><i className="big-icon--general-ai" /></div>
                                         <div className="sava-bubble sava-bubble--assistant">
                                             <div className="sava-text" data-error={m.error ? 'true' : 'false'}>
                                                 {m.text}
