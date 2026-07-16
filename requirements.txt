@@ -1,0 +1,4 @@
+# Runtime dependencies for the SAVA server module.
+# OpenRouter is OpenAI-API-compatible, so we use the official OpenAI SDK
+# pointed at OpenRouter's base URL.
+openai>=1.0,<2.0
