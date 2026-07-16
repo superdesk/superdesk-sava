@@ -18,6 +18,8 @@ from typing import Any, Dict, Optional, Tuple
 import superdesk
 from apps.archive.common import ARCHIVE, insert_into_versions_async
 from superdesk.metadata.item import CONTENT_STATE
+from superdesk.resource_fields import VERSION
+from superdesk.utc import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +170,11 @@ async def create_article(
         "headline": headline,
         "body_html": args.get("body_html") or "<p></p>",
         "state": CONTENT_STATE.SUBMITTED,
+        # Set the version fields the same way Superdesk's internal
+        # "submit to desk" creator (fetch_item) does. Without _current_version
+        # the publish service raises KeyError('_current_version').
+        VERSION: 1,
+        "versioncreated": utcnow(),
     }
     if args.get("slugline"):
         item["slugline"] = args["slugline"]

@@ -24,6 +24,10 @@ Guidelines:
 - Use the tools to actually perform what the user asks; do not just describe it.
 - To create and then publish, first call create_article, then call \
 publish_article with the article_id returned by create_article.
+- Create each article only ONCE. If an earlier create_article result already \
+exists in this conversation, reuse that article_id — never call create_article \
+again for the same article. If a publish fails, do NOT create a new article; \
+report the failure instead.
 - If the user names a desk you are unsure about, use list_desks to check.
 - Only take the actions the user asked for. If a request needs a capability you \
 do not have a tool for, say so briefly instead of guessing.
