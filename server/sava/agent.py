@@ -1,46 +1,48 @@
 """SAVA agent loop.
 
 Runs a natural-language command through an LLM (via OpenRouter) with tool
-calling, executing each tool against Superdesk as the logged-in user, and
-returns the agent's reply plus the list of actions it performed.
+calling, executing each tool against Superdesk as the logged-in user.
+
+The loop is a small state machine so that confirmation-gated tools (e.g.
+publish) can pause: when the model calls such a tool, the loop returns a
+``pending`` action instead of executing it. The client renders an approval
+card; the user's decision comes back on the next request and the loop resumes.
 """
 
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from .default_settings import get_setting, get_int_setting
-from .tools import TOOLS, execute_tool
+from .tools import Tool, ToolContext, get_openai_tools, get_tool, run_tool
 
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are SAVA, an assistant embedded inside Superdesk, a newsroom \
-content management system for journalists.
+content management system for journalists. You help users act on Superdesk using \
+natural language, by calling tools. Discover things at runtime — do not assume.
 
-You help users act on Superdesk using natural language. You have tools to list \
-desks, create text articles, and publish articles.
+Creating an article:
+- If the user hasn't said which content profile to use, call list_content_profiles \
+and ask them which one (e.g. Text or Basic).
+- Call describe_content_profile to learn that profile's required fields, then ask the \
+user for any required field they haven't already provided.
+- Once you have what you need, call create_article with `profile` and a `fields` object.
 
-Guidelines:
-- Use the tools to actually perform what the user asks; do not just describe it.
-- To create and then publish, first call create_article, then call \
-publish_article with the article_id returned by create_article.
-- Create each article only ONCE. If an earlier create_article result already \
-exists in this conversation, reuse that article_id — never call create_article \
-again for the same article. If a publish fails, do NOT create a new article; \
-report the failure instead.
-- If the user names a desk you are unsure about, use list_desks to check.
-- Only take the actions the user asked for. If a request needs a capability you \
-do not have a tool for, say so briefly instead of guessing.
-- Keep your final reply short and factual: state what you did (and any ids)."""
+Publishing:
+- Publishing makes an article public. Just call publish_article when the user wants to \
+publish — the platform will ask them to confirm, so you don't need to ask yourself.
+
+General:
+- Only take actions the user asked for. If a request needs a capability you have no tool \
+for, say so briefly instead of guessing.
+- Keep replies short and factual. Refer to articles by their headline, not their raw id \
+(a link to open the item is shown to the user automatically)."""
 
 
 def _build_client():
-    """Create an AsyncOpenAI client pointed at OpenRouter, or None if unconfigured.
-
-    Imported lazily so a missing/broken ``openai`` install never blocks the
-    module (and therefore the endpoint) from loading.
-    """
+    """Create an AsyncOpenAI client pointed at OpenRouter, or None if unconfigured."""
     api_key = get_setting("SAVA_OPENROUTER_API_KEY")
     if not api_key:
         return None
@@ -52,10 +54,9 @@ def _build_client():
     return AsyncOpenAI(api_key=api_key, base_url=get_setting("SAVA_OPENROUTER_BASE_URL"))
 
 
-# Some models (e.g. gpt-oss via its "harmony" format) leak a channel marker
-# like "final"/"analysis" glued to the start of the reply ("finalCreated ...").
-# Strip it only when immediately followed by an uppercase letter, so real words
-# like "Finally" are left intact.
+# Some models (e.g. gpt-oss via its "harmony" format) leak a channel marker like
+# "final"/"analysis" glued to the start of the reply ("finalCreated ..."). Strip it
+# only when immediately followed by an uppercase letter, so words like "Finally" survive.
 _CHANNEL_PREFIX = re.compile(r"^(final|analysis|assistant|commentary)\s*(?=[A-Z])")
 
 
@@ -65,25 +66,15 @@ def _clean_reply(text: str) -> str:
     return _CHANNEL_PREFIX.sub("", text.strip())
 
 
-def _record_action(result: Dict[str, Any]) -> Dict[str, Any]:
-    """Project a tool result down to the shape the client renders."""
-    return {
-        "tool": result.get("tool", ""),
-        "summary": result.get("summary", ""),
-        "ok": bool(result.get("ok")),
-        "detail": result.get("detail"),
-    }
+def _sanitize_history(history: Any) -> List[Dict[str, Any]]:
+    if not isinstance(history, list):
+        return []
+    return [m for m in history if isinstance(m, dict) and m.get("role")]
 
 
 def _trim_history(conversation: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Bound conversation length, trimming at a user-message boundary.
-
-    Keeping the last N messages could otherwise start the history on an
-    orphaned ``tool`` / ``assistant`` message (a tool result must follow the
-    assistant tool-call that produced it), which the model API rejects. So we
-    take the last N, then drop any leading messages until the first is a
-    ``user`` message.
-    """
+    """Bound conversation length, trimming at a user-message boundary so tool
+    call/result pairs at the tail are never split."""
     max_messages = get_int_setting("SAVA_MAX_HISTORY_MESSAGES")
     trimmed = conversation[-max_messages:]
     while trimmed and trimmed[0].get("role") != "user":
@@ -91,26 +82,85 @@ def _trim_history(conversation: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return trimmed
 
 
-def _sanitize_history(history: Any) -> List[Dict[str, Any]]:
-    """Accept only a list of message dicts; ignore anything malformed."""
-    if not isinstance(history, list):
-        return []
-    return [m for m in history if isinstance(m, dict) and m.get("role")]
+def _build_pending(tc_id: str, t: Tool, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
+    """Describe a confirmation-gated action for the client's approval card."""
+    links = []
+    article_id = args.get("article_id")
+    if article_id:
+        links = [ctx.link_to_item(str(article_id)).to_dict()]
+    return {
+        "id": tc_id,
+        "tool": t.name,
+        "title": t.confirm_title or f"Run {t.name}?",
+        "confirm_label": t.confirm_label,
+        "cancel_label": "Cancel",
+        "links": links,
+    }
+
+
+async def _resolve_tool_calls(
+    messages: List[Dict[str, Any]],
+    actions: List[Dict[str, Any]],
+    ctx: ToolContext,
+    approved: Set[str],
+    denied: Set[str],
+) -> Optional[Dict[str, Any]]:
+    """Execute any unresolved tool_calls on the trailing assistant message.
+
+    Returns a ``pending`` dict if a confirmation-gated call is awaiting a decision
+    (and stops there), otherwise None once all calls are resolved.
+    """
+    if not messages:
+        return None
+    trailing = messages[-1]
+    if trailing.get("role") != "assistant" or not trailing.get("tool_calls"):
+        return None
+
+    resolved_ids = {m.get("tool_call_id") for m in messages if m.get("role") == "tool"}
+
+    for tc in trailing["tool_calls"]:
+        tc_id = tc["id"]
+        if tc_id in resolved_ids:
+            continue
+
+        name = tc["function"]["name"]
+        try:
+            args = json.loads(tc["function"].get("arguments") or "{}")
+        except (TypeError, ValueError):
+            args = {}
+
+        t = get_tool(name)
+
+        if t is not None and t.requires_confirmation and tc_id not in approved and tc_id not in denied:
+            return _build_pending(tc_id, t, args, ctx)
+
+        if tc_id in denied:
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc_id,
+                "content": "The user declined to perform this action.",
+            })
+            actions.append({"tool": name, "ok": False, "summary": "Cancelled by user", "detail": None, "links": []})
+            continue
+
+        result = await run_tool(name, args, ctx)
+        messages.append({"role": "tool", "tool_call_id": tc_id, "content": result.for_model})
+        actions.append(result.action_dict(name))
+
+    return None
 
 
 async def run_agent(
     prompt: str,
     user: Optional[Dict[str, Any]],
     history: Optional[List[Dict[str, Any]]] = None,
+    decision: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Run one command end-to-end.
-
-    ``history`` is the prior conversation (everything after the system prompt)
-    that the client echoed back. Returns
-    ``{"reply": str, "actions": [...], "conversation": [...]}`` where
-    ``conversation`` is the updated history to send back on the next turn.
-    """
+    """Run one turn. Returns
+    ``{"reply", "actions", "conversation", "pending"}`` where ``pending`` is a
+    confirmation card the client must resolve (or None)."""
     prior = _sanitize_history(history)
+    ctx = ToolContext(user=user)
 
     client = _build_client()
     if client is None:
@@ -121,26 +171,43 @@ async def run_agent(
             ),
             "actions": [],
             "conversation": prior,
+            "pending": None,
         }
 
     model = get_setting("SAVA_MODEL")
     max_steps = get_int_setting("SAVA_MAX_STEPS")
 
-    # The system prompt is prepended fresh each turn and is never part of the
-    # returned conversation.
     messages: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.extend(prior)
-    messages.append({"role": "user", "content": prompt})
+    if prompt:
+        messages.append({"role": "user", "content": prompt})
+
+    approved: Set[str] = set()
+    denied: Set[str] = set()
+    if isinstance(decision, dict) and decision.get("id"):
+        (approved if decision.get("approved") else denied).add(decision["id"])
 
     actions: List[Dict[str, Any]] = []
     reply = "Done."
 
     for _ in range(max_steps):
+        # 1. Resolve any pending tool_calls on the trailing assistant message
+        #    (handles both fresh turns and resumes after an approval).
+        pending = await _resolve_tool_calls(messages, actions, ctx, approved, denied)
+        if pending is not None:
+            return {
+                "reply": "",
+                "actions": actions,
+                "conversation": _trim_history(messages[1:]),
+                "pending": pending,
+            }
+
+        # 2. Ask the model what to do next.
         try:
             response = await client.chat.completions.create(
                 model=model,
                 messages=messages,
-                tools=TOOLS,
+                tools=get_openai_tools(),
                 tool_choice="auto",
                 temperature=0,
             )
@@ -149,9 +216,8 @@ async def run_agent(
             return {
                 "reply": f"The AI request failed: {exc}",
                 "actions": actions,
-                # messages always ends on a complete turn boundary here, so it
-                # is safe to hand back as the next turn's history.
                 "conversation": _trim_history(messages[1:]),
+                "pending": None,
             }
 
         message = response.choices[0].message
@@ -160,50 +226,31 @@ async def run_agent(
         if not tool_calls:
             reply = _clean_reply(message.content or "") or "Done."
             messages.append({"role": "assistant", "content": reply})
-            break
-
-        # Echo the assistant's tool-call message back into the conversation.
-        messages.append(
-            {
-                "role": "assistant",
-                "content": message.content or "",
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in tool_calls
-                ],
+            return {
+                "reply": reply,
+                "actions": actions,
+                "conversation": _trim_history(messages[1:]),
+                "pending": None,
             }
-        )
 
-        for tool_call in tool_calls:
-            try:
-                args = json.loads(tool_call.function.arguments or "{}")
-            except (TypeError, ValueError):
-                args = {}
-
-            result = await execute_tool(tool_call.function.name, args, user)
-            actions.append(_record_action(result))
-
-            messages.append(
+        # Append the assistant's tool-call message; the loop resolves it on the
+        # next iteration (step 1).
+        messages.append({
+            "role": "assistant",
+            "content": message.content or "",
+            "tool_calls": [
                 {
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": result.get("for_model", "done"),
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
                 }
-            )
-    else:
-        # Ran out of steps without a final (tool-call-free) reply.
-        reply = "I reached the step limit before fully finishing. Here is what I did."
-        messages.append({"role": "assistant", "content": reply})
+                for tc in tool_calls
+            ],
+        })
 
     return {
-        "reply": reply,
+        "reply": "I reached the step limit before fully finishing. Here is what I did.",
         "actions": actions,
         "conversation": _trim_history(messages[1:]),
+        "pending": None,
     }
