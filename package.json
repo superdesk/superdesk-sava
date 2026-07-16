@@ -1,0 +1,14 @@
+{
+    "name": "superdesk-sava",
+    "version": "0.0.1-dev",
+    "license": "AGPL-3.0",
+    "description": "Superdesk SAVA - natural language agent for Superdesk",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/BrianMwangi21/superdesk-sava.git"
+    },
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"No tests yet\""
+    }
+}
