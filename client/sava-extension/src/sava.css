@@ -8,8 +8,9 @@
 
 .sava-root {
     /* Palette derived from Superdesk tokens (fallbacks keep it safe). */
-    --sava-accent: var(--sd-colour-highlight, hsl(290, 60%, 50%));
-    --sava-accent-text: var(--sd-colour-highlight--text, #ffffff);
+    /* Match the active extension nav button (Superdesk's interactive blue). */
+    --sava-accent: var(--sd-colour-interactive, hsl(198, 50%, 50%));
+    --sava-accent-text: #ffffff;
     --sava-canvas: var(--sd-colour-background__base--00, #ffffff);
     --sava-surface: var(--sd-colour-background__base--10, #eef0f3);
     --sava-line: var(--sd-colour-line--medium, #d7dbe0);
