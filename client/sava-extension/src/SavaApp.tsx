@@ -1,4 +1,6 @@
 import * as React from 'react';
+import {marked} from 'marked';
+import DOMPurify from 'dompurify';
 import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
 import './sava.css';
 import {
@@ -25,6 +27,15 @@ interface IChatMessage {
     text: string;
     actions?: Array<ISavaAction>;
     error?: boolean;
+}
+
+/** Render an assistant reply as sanitized markdown (bold, lists, links, code). */
+function Markdown({text}: {text: string}) {
+    const html = React.useMemo(() => {
+        const raw = marked.parse(text || '', {async: false}) as string;
+        return DOMPurify.sanitize(raw);
+    }, [text]);
+    return <div className="sava-md" dangerouslySetInnerHTML={{__html: html}} />;
 }
 
 /** Client-navigable links: prepend the app's own hash router (host-agnostic). */
@@ -153,7 +164,11 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
                 <div className="sava-avatar"><i className="big-icon--general-ai" /></div>
                 <div className="sava-bubble sava-bubble--assistant">
                     {m.text ? (
-                        <div className="sava-text" data-error={m.error ? 'true' : 'false'}>{m.text}</div>
+                        m.error ? (
+                            <div className="sava-text" data-error="true">{m.text}</div>
+                        ) : (
+                            <Markdown text={m.text} />
+                        )
                     ) : null}
                     {m.actions != null && m.actions.length > 0 && (
                         <ActivityLog actions={m.actions} />

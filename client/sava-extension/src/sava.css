@@ -141,6 +141,78 @@
     color: var(--sava-danger);
 }
 
+/* ---- rendered markdown (assistant replies) -------------------------- */
+.sava-md {
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.sava-md > :first-child {
+    margin-top: 0;
+}
+
+.sava-md > :last-child {
+    margin-bottom: 0;
+}
+
+.sava-md p {
+    margin: 0 0 8px 0;
+}
+
+.sava-md strong {
+    font-weight: 600;
+}
+
+.sava-md ul,
+.sava-md ol {
+    margin: 6px 0;
+    padding-left: 20px;
+}
+
+.sava-md li {
+    margin: 2px 0;
+}
+
+.sava-md a {
+    color: var(--sava-accent);
+}
+
+.sava-md h1,
+.sava-md h2,
+.sava-md h3 {
+    font-size: 1.05em;
+    font-weight: 600;
+    margin: 10px 0 4px 0;
+}
+
+.sava-md code {
+    background: rgba(0, 0, 0, 0.06);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.sava-md pre {
+    background: rgba(0, 0, 0, 0.06);
+    padding: 10px 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.sava-md pre code {
+    background: transparent;
+    padding: 0;
+}
+
+.sava-md blockquote {
+    margin: 8px 0;
+    padding-left: 12px;
+    border-left: 3px solid var(--sava-line);
+    color: var(--sava-text-muted);
+}
+
 /* ---- activity log (tool calls, stacked one per line) ---------------- */
 .sava-actions {
     margin-top: 10px;
