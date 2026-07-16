@@ -7,6 +7,7 @@ returns the agent's reply plus the list of actions it performed.
 
 import json
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from .default_settings import get_setting, get_int_setting
@@ -49,6 +50,19 @@ def _build_client():
         logger.error("SAVA: the 'openai' package is not installed.")
         return None
     return AsyncOpenAI(api_key=api_key, base_url=get_setting("SAVA_OPENROUTER_BASE_URL"))
+
+
+# Some models (e.g. gpt-oss via its "harmony" format) leak a channel marker
+# like "final"/"analysis" glued to the start of the reply ("finalCreated ...").
+# Strip it only when immediately followed by an uppercase letter, so real words
+# like "Finally" are left intact.
+_CHANNEL_PREFIX = re.compile(r"^(final|analysis|assistant|commentary)\s*(?=[A-Z])")
+
+
+def _clean_reply(text: str) -> str:
+    if not text:
+        return text
+    return _CHANNEL_PREFIX.sub("", text.strip())
 
 
 def _record_action(result: Dict[str, Any]) -> Dict[str, Any]:
@@ -144,7 +158,7 @@ async def run_agent(
         tool_calls = message.tool_calls or []
 
         if not tool_calls:
-            reply = message.content or "Done."
+            reply = _clean_reply(message.content or "") or "Done."
             messages.append({"role": "assistant", "content": reply})
             break
 
