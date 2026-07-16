@@ -10,5 +10,9 @@
     "main": "index.ts",
     "scripts": {
         "test": "echo \"No tests yet\""
+    },
+    "dependencies": {
+        "@chatscope/chat-ui-kit-react": "^2.1.1",
+        "@chatscope/chat-ui-kit-styles": "^1.2.0"
     }
 }
