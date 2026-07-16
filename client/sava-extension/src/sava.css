@@ -103,7 +103,9 @@
 
 .sava-avatar i {
     color: var(--sava-accent-text);
-    font-size: 18px;
+    /* big-icon boxes itself to --big-icon-size; set it so the glyph box
+       matches its size and the flex-center actually centers it. */
+    --big-icon-size: 18px;
 }
 
 /* Bubbles */
@@ -210,7 +212,7 @@
 
 .sava-empty__mark i {
     color: var(--sava-accent-text);
-    font-size: 30px;
+    --big-icon-size: 30px;
 }
 
 .sava-empty__title {
