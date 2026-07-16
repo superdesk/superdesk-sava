@@ -15,7 +15,7 @@ import re
 from typing import Any, Dict, List, Optional, Set
 
 from .default_settings import get_setting, get_int_setting
-from .tools import Tool, ToolContext, get_openai_tools, get_tool, run_tool
+from .tools import Tool, ToolContext, ToolLink, get_openai_tools, get_tool, run_tool
 
 logger = logging.getLogger(__name__)
 
@@ -42,15 +42,38 @@ Editing & workflow:
 it. Publishing and spiking are confirmed by the platform, so just call the tool — do not \
 ask for confirmation yourself.
 
-Planning & assignments:
+Planning, events & assignments:
 - Use create_planning_item / add_coverage / search_planning for planning; coverage types \
-come from list_coverage_types. Use list_my_assignments for the user's assignments.
+come from list_coverage_types.
+- Use create_event / update_event / search_events for calendar events, \
+link_event_to_planning to connect an event to a planning item, and post_event to publish \
+an event.
+- Use list_my_assignments for the user's assignments.
 
 General:
 - Only take actions the user asked for. If a request needs a capability you have no tool \
 for, say so briefly instead of guessing.
 - Keep replies short and factual. Refer to items by their headline/slugline, not their \
 raw id (a link to open the item is shown to the user automatically)."""
+
+
+def _system_prompt() -> str:
+    """System prompt plus the current date/time so the agent can resolve relative dates."""
+    from superdesk.utc import utcnow
+
+    now = utcnow()
+    tz = "UTC"
+    try:
+        from superdesk.core import get_app_config
+
+        tz = get_app_config("DEFAULT_TIMEZONE") or "UTC"
+    except Exception:  # noqa: BLE001
+        pass
+    return (
+        SYSTEM_PROMPT
+        + f"\n\nContext: the current date/time is {now.isoformat()} (UTC); the instance "
+        f"timezone is {tz}. Use these to compute relative dates like 'today' or 'Friday'."
+    )
 
 
 def _build_client():
@@ -97,9 +120,10 @@ def _trim_history(conversation: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def _build_pending(tc_id: str, t: Tool, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
     """Describe a confirmation-gated action for the client's approval card."""
     links = []
-    article_id = args.get("article_id")
-    if article_id:
-        links = [ctx.link_to_item(str(article_id)).to_dict()]
+    if args.get("article_id"):
+        links = [ctx.link_to_item(str(args["article_id"])).to_dict()]
+    elif args.get("event_id") or args.get("planning_id"):
+        links = [ToolLink(label="Open planning", route="/planning").to_dict()]
     return {
         "id": tc_id,
         "tool": t.name,
@@ -189,7 +213,7 @@ async def run_agent(
     model = get_setting("SAVA_MODEL")
     max_steps = get_int_setting("SAVA_MAX_STEPS")
 
-    messages: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages: List[Dict[str, Any]] = [{"role": "system", "content": _system_prompt()}]
     messages.extend(prior)
     if prompt:
         messages.append({"role": "user", "content": prompt})
