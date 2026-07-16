@@ -1,33 +1,297 @@
-/*
- * SAVA overrides on top of the chatscope default theme.
- *
- * The host renders our page inside a `display: flex; height: 100%;` wrapper
- * (sdExtensionPage). Our root needs flex-grow to fill it, otherwise it
- * collapses to chatscope's intrinsic ~500px width. And chatscope sizes text
- * from `.cs-main-container { font-size: 1rem }`, which is tiny under Superdesk's
- * shrunk root font — so we pin an absolute size that cascades to messages/input.
- */
+/* =========================================================================
+   SAVA — token-driven theme layered on top of chatscope.
+   Colors come from Superdesk's design tokens (--sd-colour-*) so SAVA feels
+   native to the platform; each has a safe fallback in case a token is absent.
+   chatscope provides the plumbing (scroll, input); we render custom rows and
+   restyle everything.
+   ========================================================================= */
 
 .sava-root {
+    /* Palette derived from Superdesk tokens (fallbacks keep it safe). */
+    --sava-accent: var(--sd-colour-highlight, hsl(290, 60%, 50%));
+    --sava-accent-text: var(--sd-colour-highlight--text, #ffffff);
+    --sava-canvas: var(--sd-colour-background__base--00, #ffffff);
+    --sava-surface: var(--sd-colour-background__base--10, #eef0f3);
+    --sava-line: var(--sd-colour-line--medium, #d7dbe0);
+    --sava-text: var(--sd-colour-text-default, #1f2733);
+    --sava-text-muted: rgba(0, 0, 0, 0.52);
+    --sava-ok: var(--sd-colour-save, #1b8a5a);
+    --sava-danger: var(--sd-colour-alert, #e02020);
+    --sava-column: 760px;
+
     display: flex;
     flex: 1 1 auto;
     min-width: 0;
     height: 100%;
+    color: var(--sava-text);
 }
 
+/* Fill the host's flex wrapper (otherwise collapses to intrinsic width). */
 .sava-root .cs-main-container {
     flex: 1 1 auto;
     width: 100%;
     border: none;
+    background: var(--sava-canvas);
     font-size: 15px;
 }
 
-/* A touch more presence for the header and the empty-state suggestions. */
-.sava-root .cs-conversation-header__user-name {
-    font-size: 1.1em;
+.sava-root .cs-chat-container {
+    background: var(--sava-canvas);
 }
 
-.sava-root .cs-message-input__content-editor,
-.sava-root .cs-message-input__content-editor-wrapper {
+/* ---- header --------------------------------------------------------- */
+.sava-root .cs-conversation-header {
+    background: var(--sava-canvas);
+    border-bottom: 1px solid var(--sava-line);
+    padding: 10px 16px;
+}
+
+.sava-root .cs-conversation-header__content .cs-conversation-header__user-name {
+    font-size: 1.1em;
+    color: var(--sava-text);
+    background: transparent;
+}
+
+.sava-root .cs-conversation-header__content .cs-conversation-header__info {
+    color: var(--sava-text-muted);
+    background: transparent;
+}
+
+.sava-root .cs-conversation-header__actions {
+    background: transparent;
+}
+
+/* ---- message list --------------------------------------------------- */
+.sava-root .cs-message-list {
+    background: var(--sava-canvas);
+    padding: 24px 16px;
+}
+
+/* Conversation lives in a centered, readable column. */
+.sava-row {
+    width: 100%;
+    max-width: var(--sava-column);
+    margin: 0 auto 18px auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    box-sizing: border-box;
+}
+
+.sava-row--user {
+    justify-content: flex-end;
+}
+
+.sava-row--assistant {
+    justify-content: flex-start;
+}
+
+/* SAVA avatar */
+.sava-avatar {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--sava-accent);
+    color: var(--sava-accent-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    margin-top: 2px;
+}
+
+.sava-avatar i {
+    color: var(--sava-accent-text);
+}
+
+/* Bubbles */
+.sava-bubble {
+    max-width: 78%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.45;
+}
+
+.sava-bubble--user {
+    background: var(--sava-accent);
+    color: var(--sava-accent-text);
+    border-bottom-right-radius: 4px;
+}
+
+.sava-bubble--assistant {
+    background: var(--sava-surface);
+    color: var(--sava-text);
+    border: 1px solid var(--sava-line);
+    border-bottom-left-radius: 4px;
+}
+
+.sava-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.sava-text[data-error="true"] {
+    color: var(--sava-danger);
+}
+
+/* ---- activity log (tool calls, stacked one per line) ---------------- */
+.sava-actions {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sava-action {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    background: var(--sava-canvas);
+    border: 1px solid var(--sava-line);
+    font-size: 0.92em;
+}
+
+.sava-action__icon {
+    flex: 0 0 auto;
+    font-weight: 700;
+}
+
+.sava-action__icon.is-ok {
+    color: var(--sava-ok);
+}
+
+.sava-action__icon.is-fail {
+    color: var(--sava-danger);
+}
+
+.sava-action__tool {
+    flex: 0 0 auto;
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+    color: var(--sava-text-muted);
+    background: transparent;
+}
+
+.sava-action__summary {
+    color: var(--sava-text);
+}
+
+/* ---- empty state ---------------------------------------------------- */
+.sava-empty {
+    height: 100%;
+    max-width: var(--sava-column);
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+.sava-empty__mark {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    background: var(--sava-accent);
+    color: var(--sava-accent-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    margin-bottom: 18px;
+}
+
+.sava-empty__title {
+    font-size: 26px;
+    font-weight: 300;
+    margin: 0 0 6px 0;
+    color: var(--sava-text);
+}
+
+.sava-empty__subtitle {
+    color: var(--sava-text-muted);
+    margin: 0 0 22px 0;
+}
+
+.sava-suggestions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    max-width: 520px;
+}
+
+.sava-suggestion {
+    text-align: left;
+    padding: 13px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--sava-line);
+    background: var(--sava-canvas);
+    color: var(--sava-text);
+    font-size: 14px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
+}
+
+.sava-suggestion:hover {
+    border-color: var(--sava-accent);
+    background: var(--sava-surface);
+}
+
+.sava-suggestion:active {
+    transform: translateY(1px);
+}
+
+/* ---- input (centered floating pill) --------------------------------- */
+.sava-root .cs-message-input {
+    max-width: var(--sava-column);
+    margin: 0 auto 16px auto;
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--sava-surface);
+    border: 1px solid var(--sava-line);
+    border-radius: 24px;
+    padding: 2px 6px 2px 16px;
+}
+
+.sava-root .cs-message-input__content-editor-container,
+.sava-root .cs-message-input__content-editor-wrapper,
+.sava-root .cs-message-input__content-editor {
+    background: transparent;
+    border: none;
+}
+
+.sava-root .cs-message-input__content-editor {
+    color: var(--sava-text);
     font-size: 1em;
+    padding: 10px 0;
+}
+
+.sava-root .cs-message-input__content-editor[data-placeholder]:empty:before {
+    color: var(--sava-text-muted);
+}
+
+.sava-root .cs-button--send {
+    color: var(--sava-accent);
+}
+
+/* ---- typing indicator ----------------------------------------------- */
+.sava-root .cs-typing-indicator {
+    background: var(--sava-canvas);
+    max-width: var(--sava-column);
+    margin: 0 auto;
+}
+
+.sava-root .cs-typing-indicator__text {
+    color: var(--sava-text-muted);
+}
+
+.sava-root .cs-typing-indicator__dot {
+    background-color: var(--sava-accent);
 }

@@ -6,7 +6,6 @@ import {
     ChatContainer,
     ConversationHeader,
     MessageList,
-    Message,
     MessageInput,
     TypingIndicator,
 } from '@chatscope/chat-ui-kit-react';
@@ -28,25 +27,18 @@ interface IChatMessage {
     error?: boolean;
 }
 
-function ActionChips({actions}: {actions: Array<ISavaAction>}) {
+/** Tool calls rendered as a vertical activity log, one per line. */
+function ActivityLog({actions}: {actions: Array<ISavaAction>}) {
     return (
-        <div style={{display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8}}>
+        <div className="sava-actions">
             {actions.map((a, i) => (
-                <span
-                    key={i}
-                    title={a.detail || ''}
-                    style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                        padding: '3px 10px', borderRadius: 12, fontSize: 12,
-                        background: a.ok ? 'rgba(46,125,50,0.12)' : 'rgba(198,40,40,0.12)',
-                        color: a.ok ? '#2e7d32' : '#c62828',
-                        border: `1px solid ${a.ok ? 'rgba(46,125,50,0.35)' : 'rgba(198,40,40,0.35)'}`,
-                    }}
-                >
-                    <span>{a.ok ? '✓' : '✕'}</span>
-                    <code style={{background: 'transparent'}}>{a.tool}</code>
-                    <span>{a.summary}</span>
-                </span>
+                <div className="sava-action" key={i} title={a.detail || ''}>
+                    <span className={'sava-action__icon ' + (a.ok ? 'is-ok' : 'is-fail')}>
+                        {a.ok ? '✓' : '✕'}
+                    </span>
+                    <code className="sava-action__tool">{a.tool}</code>
+                    <span className="sava-action__summary">{a.summary}</span>
+                </div>
             ))}
         </div>
     );
@@ -72,7 +64,6 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
 
         sendCommand(prompt, conversation).then(
             (result) => {
-                // Persist the server's updated conversation for the next turn.
                 setConversation(result.conversation);
                 setMessages((prev) => prev.concat({
                     id: nextId.current++,
@@ -114,7 +105,7 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
                             <button
                                 className="btn btn--small"
                                 onClick={resetChat}
-                                disabled={loading || messages.length === 0}
+                                disabled={loading || isEmpty}
                                 title={gettext('Start a new chat')}
                             >
                                 {gettext('New chat')}
@@ -128,30 +119,15 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
                         }
                     >
                         {isEmpty ? (
-                            <div
-                                style={{
-                                    height: '100%', display: 'flex', flexDirection: 'column',
-                                    justifyContent: 'center', alignItems: 'center', textAlign: 'center',
-                                    padding: 24, gap: 6,
-                                }}
-                            >
-                                <h1 style={{fontSize: 26, fontWeight: 300, margin: 0}}>
-                                    {gettext('What would you like to do?')}
-                                </h1>
-                                <p style={{opacity: 0.6, marginTop: 0, marginBottom: 12}}>
+                            <div className="sava-empty">
+                                <div className="sava-empty__mark"><i className="icon--general-ai" /></div>
+                                <h1 className="sava-empty__title">{gettext('What would you like to do?')}</h1>
+                                <p className="sava-empty__subtitle">
                                     {gettext('Describe it in plain language and SAVA will do it for you.')}
                                 </p>
-                                <div style={{display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 520}}>
+                                <div className="sava-suggestions">
                                     {EXAMPLES.map((ex, i) => (
-                                        <button
-                                            key={i}
-                                            onClick={() => submit(ex)}
-                                            style={{
-                                                textAlign: 'left', padding: '12px 16px', borderRadius: 8, cursor: 'pointer',
-                                                border: '1px solid var(--sd-colour-line--light, #e0e0e0)',
-                                                background: 'var(--sd-colour-bg, #fff)', fontSize: 14,
-                                            }}
-                                        >
+                                        <button key={i} className="sava-suggestion" onClick={() => submit(ex)}>
                                             {ex}
                                         </button>
                                     ))}
@@ -159,22 +135,25 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
                             </div>
                         ) : (
                             messages.map((m) => (
-                                <Message
-                                    key={m.id}
-                                    model={{
-                                        direction: m.role === 'user' ? 'outgoing' : 'incoming',
-                                        position: 'single',
-                                    }}
-                                >
-                                    <Message.CustomContent>
-                                        <div style={{whiteSpace: 'pre-wrap', color: m.error ? '#c62828' : undefined}}>
-                                            {m.text}
+                                m.role === 'user' ? (
+                                    <div className="sava-row sava-row--user" key={m.id}>
+                                        <div className="sava-bubble sava-bubble--user">
+                                            <div className="sava-text">{m.text}</div>
                                         </div>
-                                        {m.actions != null && m.actions.length > 0 && (
-                                            <ActionChips actions={m.actions} />
-                                        )}
-                                    </Message.CustomContent>
-                                </Message>
+                                    </div>
+                                ) : (
+                                    <div className="sava-row sava-row--assistant" key={m.id}>
+                                        <div className="sava-avatar"><i className="icon--general-ai" /></div>
+                                        <div className="sava-bubble sava-bubble--assistant">
+                                            <div className="sava-text" data-error={m.error ? 'true' : 'false'}>
+                                                {m.text}
+                                            </div>
+                                            {m.actions != null && m.actions.length > 0 && (
+                                                <ActivityLog actions={m.actions} />
+                                            )}
+                                        </div>
+                                    </div>
+                                )
                             ))
                         )}
                     </MessageList>
