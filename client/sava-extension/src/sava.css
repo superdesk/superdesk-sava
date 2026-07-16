@@ -184,6 +184,73 @@
     color: var(--sava-text);
 }
 
+/* ---- links (client-navigable, host-agnostic) ------------------------ */
+.sava-links {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.sava-link {
+    color: var(--sava-accent);
+    text-decoration: none;
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+.sava-link:hover {
+    text-decoration: underline;
+}
+
+/* ---- confirmation card (approval-gated actions) --------------------- */
+.sava-confirm {
+    max-width: 78%;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid var(--sava-accent);
+    background: var(--sava-surface);
+    border-bottom-left-radius: 4px;
+}
+
+.sava-confirm__title {
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.sava-confirm__links {
+    margin-bottom: 12px;
+}
+
+.sava-confirm__actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.sava-confirm__btn {
+    padding: 7px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.92em;
+    border: 1px solid var(--sava-line);
+}
+
+.sava-confirm__btn--cancel {
+    background: var(--sava-canvas);
+    color: var(--sava-text);
+}
+
+.sava-confirm__btn--confirm {
+    background: var(--sava-accent);
+    color: var(--sava-accent-text);
+    border-color: var(--sava-accent);
+}
+
+.sava-confirm__btn--confirm:hover {
+    filter: brightness(0.95);
+}
+
 /* ---- empty state ---------------------------------------------------- */
 .sava-empty {
     height: 100%;
