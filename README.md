@@ -64,6 +64,11 @@ This repo is referenced from the blueprint via GitHub
 
 ```bash
 # client
+# 1. install this repo's own runtime deps (e.g. @chatscope) — `npx link` does
+#    NOT do this, and the host build resolves linked packages via their real
+#    path, so it needs superdesk-sava/node_modules to exist.
+cd /path/to/superdesk-sava && npm install
+# 2. link it into the host client
 cd /path/to/superdesk/client && npx link /path/to/superdesk-sava
 
 # server (inside the right pyenv)
