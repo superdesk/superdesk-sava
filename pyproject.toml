@@ -1,0 +1,24 @@
+[tool.black]
+line-length = 120
+target-version = ['py39']
+include = '\.py$'
+exclude = '''
+(
+    \.eggs
+    | \.git
+    | \.mypy_cache
+    | \.env
+    | _build
+    | build
+    | dist
+    | env
+    | node_modules
+)
+'''
+
+[tool.mypy]
+python_version = "3.9"
+warn_unused_configs = true
+allow_untyped_globals = true
+ignore_missing_imports = true
+files = ["server/sava"]
