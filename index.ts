@@ -13,4 +13,8 @@
 
 declare const angular: any;
 
-export default angular.module('superdesk.sava', []);
+// The module name MUST match the package name used in the host's
+// superdesk.config.js `apps` list ("superdesk-sava"). Superdesk adds that
+// string directly as an Angular module dependency, so a mismatch throws
+// "[$injector:nomod] Module 'superdesk-sava' is not available".
+export default angular.module('superdesk-sava', []);
