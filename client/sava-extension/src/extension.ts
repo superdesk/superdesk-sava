@@ -20,7 +20,10 @@ const extension: IExtension = {
                     addToMainMenu: false,
                     addToSideMenu: {
                         icon: 'general-ai',
-                        order: 1000,
+                        // Sidenav sorts ascending by order; Planning is the current
+                        // lowest at 1100. Keep SAVA last (after Planning) while it's
+                        // in beta.
+                        order: 1200,
                         keyBinding: 'ctrl+alt+a',
                     },
                 }],
