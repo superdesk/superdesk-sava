@@ -7,7 +7,6 @@ import {
     ConversationHeader,
     MessageList,
     MessageInput,
-    TypingIndicator,
 } from '@chatscope/chat-ui-kit-react';
 
 import {superdeskApi} from './superdeskApi';
@@ -95,6 +94,44 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
 
     const isEmpty = messages.length === 0;
 
+    // Conversation rows (+ a typing row while waiting), rendered in-flow inside
+    // the centered column — no absolute-positioned chatscope indicator to fight.
+    const rows: Array<React.ReactNode> = messages.map((m) => (
+        m.role === 'user' ? (
+            <div className="sava-row sava-row--user" key={m.id}>
+                <div className="sava-bubble sava-bubble--user">
+                    <div className="sava-text">{m.text}</div>
+                </div>
+            </div>
+        ) : (
+            <div className="sava-row sava-row--assistant" key={m.id}>
+                <div className="sava-avatar"><i className="big-icon--general-ai" /></div>
+                <div className="sava-bubble sava-bubble--assistant">
+                    <div className="sava-text" data-error={m.error ? 'true' : 'false'}>
+                        {m.text}
+                    </div>
+                    {m.actions != null && m.actions.length > 0 && (
+                        <ActivityLog actions={m.actions} />
+                    )}
+                </div>
+            </div>
+        )
+    ));
+
+    if (loading) {
+        rows.push(
+            <div className="sava-row sava-row--assistant" key="typing">
+                <div className="sava-avatar"><i className="big-icon--general-ai" /></div>
+                <div className="sava-typing">
+                    <span className="sava-typing__dot" />
+                    <span className="sava-typing__dot" />
+                    <span className="sava-typing__dot" />
+                    <span className="sava-typing__label">{gettext('SAVA is working…')}</span>
+                </div>
+            </div>,
+        );
+    }
+
     return (
         <div className="sava-root">
             <MainContainer>
@@ -113,11 +150,7 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
                         </ConversationHeader.Actions>
                     </ConversationHeader>
 
-                    <MessageList
-                        typingIndicator={
-                            loading ? <TypingIndicator content={gettext('SAVA is working…')} /> : undefined
-                        }
-                    >
+                    <MessageList>
                         {isEmpty ? (
                             <div className="sava-empty">
                                 <div className="sava-empty__mark"><i className="big-icon--general-ai" /></div>
@@ -133,29 +166,7 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
                                     ))}
                                 </div>
                             </div>
-                        ) : (
-                            messages.map((m) => (
-                                m.role === 'user' ? (
-                                    <div className="sava-row sava-row--user" key={m.id}>
-                                        <div className="sava-bubble sava-bubble--user">
-                                            <div className="sava-text">{m.text}</div>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="sava-row sava-row--assistant" key={m.id}>
-                                        <div className="sava-avatar"><i className="big-icon--general-ai" /></div>
-                                        <div className="sava-bubble sava-bubble--assistant">
-                                            <div className="sava-text" data-error={m.error ? 'true' : 'false'}>
-                                                {m.text}
-                                            </div>
-                                            {m.actions != null && m.actions.length > 0 && (
-                                                <ActivityLog actions={m.actions} />
-                                            )}
-                                        </div>
-                                    </div>
-                                )
-                            ))
-                        )}
+                        ) : rows}
                     </MessageList>
 
                     <MessageInput

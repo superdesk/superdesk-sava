@@ -289,22 +289,41 @@
     align-self: center;
 }
 
-/* ---- typing indicator ----------------------------------------------- */
-.sava-root .cs-typing-indicator {
-    background: var(--sava-canvas);
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
-    width: 100%;
-    max-width: var(--sava-column);
-    padding-left: 40px;
-    box-sizing: border-box;
-}
-
-.sava-root .cs-typing-indicator__text {
+/* ---- typing row (in-flow "SAVA is working") ------------------------- */
+.sava-typing {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 14px;
     color: var(--sava-text-muted);
+    font-size: 0.95em;
 }
 
-.sava-root .cs-typing-indicator__dot {
-    background-color: var(--sava-accent);
+.sava-typing__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--sava-accent);
+    animation: sava-blink 1.2s infinite ease-in-out both;
+}
+
+.sava-typing__dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.sava-typing__dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+.sava-typing__label {
+    margin-left: 6px;
+}
+
+@keyframes sava-blink {
+    0%, 80%, 100% {
+        opacity: 0.25;
+    }
+    40% {
+        opacity: 1;
+    }
 }
