@@ -21,6 +21,11 @@ SAVA_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # Max agent loop iterations (model call -> tool calls -> model call ...).
 SAVA_MAX_STEPS = 6
 
+# Max number of prior conversation messages to keep when a client sends history
+# back. Bounds token growth over a long chat. Trimmed at a user-message boundary
+# so tool-call/tool-result pairs are never split.
+SAVA_MAX_HISTORY_MESSAGES = 20
+
 
 # --- Resolution --------------------------------------------------------------
 
@@ -29,6 +34,7 @@ _DEFAULTS = {
     "SAVA_MODEL": SAVA_MODEL,
     "SAVA_OPENROUTER_BASE_URL": SAVA_OPENROUTER_BASE_URL,
     "SAVA_MAX_STEPS": SAVA_MAX_STEPS,
+    "SAVA_MAX_HISTORY_MESSAGES": SAVA_MAX_HISTORY_MESSAGES,
 }
 
 

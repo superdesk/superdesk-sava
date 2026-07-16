@@ -57,10 +57,43 @@ def _record_action(result: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _trim_history(conversation: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Bound conversation length, trimming at a user-message boundary.
+
+    Keeping the last N messages could otherwise start the history on an
+    orphaned ``tool`` / ``assistant`` message (a tool result must follow the
+    assistant tool-call that produced it), which the model API rejects. So we
+    take the last N, then drop any leading messages until the first is a
+    ``user`` message.
+    """
+    max_messages = get_int_setting("SAVA_MAX_HISTORY_MESSAGES")
+    trimmed = conversation[-max_messages:]
+    while trimmed and trimmed[0].get("role") != "user":
+        trimmed = trimmed[1:]
+    return trimmed
+
+
+def _sanitize_history(history: Any) -> List[Dict[str, Any]]:
+    """Accept only a list of message dicts; ignore anything malformed."""
+    if not isinstance(history, list):
+        return []
+    return [m for m in history if isinstance(m, dict) and m.get("role")]
+
+
 async def run_agent(
-    prompt: str, user: Optional[Dict[str, Any]]
+    prompt: str,
+    user: Optional[Dict[str, Any]],
+    history: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    """Run one command end-to-end. Returns ``{"reply": str, "actions": [...]}``."""
+    """Run one command end-to-end.
+
+    ``history`` is the prior conversation (everything after the system prompt)
+    that the client echoed back. Returns
+    ``{"reply": str, "actions": [...], "conversation": [...]}`` where
+    ``conversation`` is the updated history to send back on the next turn.
+    """
+    prior = _sanitize_history(history)
+
     client = _build_client()
     if client is None:
         return {
@@ -69,16 +102,20 @@ async def run_agent(
                 "SAVA_MODEL) in the server environment."
             ),
             "actions": [],
+            "conversation": prior,
         }
 
     model = get_setting("SAVA_MODEL")
     max_steps = get_int_setting("SAVA_MAX_STEPS")
 
-    messages: List[Dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": prompt},
-    ]
+    # The system prompt is prepended fresh each turn and is never part of the
+    # returned conversation.
+    messages: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages.extend(prior)
+    messages.append({"role": "user", "content": prompt})
+
     actions: List[Dict[str, Any]] = []
+    reply = "Done."
 
     for _ in range(max_steps):
         try:
@@ -91,13 +128,21 @@ async def run_agent(
             )
         except Exception as exc:  # noqa: BLE001 - report model/transport failures
             logger.exception("SAVA model call failed")
-            return {"reply": f"The AI request failed: {exc}", "actions": actions}
+            return {
+                "reply": f"The AI request failed: {exc}",
+                "actions": actions,
+                # messages always ends on a complete turn boundary here, so it
+                # is safe to hand back as the next turn's history.
+                "conversation": _trim_history(messages[1:]),
+            }
 
         message = response.choices[0].message
         tool_calls = message.tool_calls or []
 
         if not tool_calls:
-            return {"reply": message.content or "Done.", "actions": actions}
+            reply = message.content or "Done."
+            messages.append({"role": "assistant", "content": reply})
+            break
 
         # Echo the assistant's tool-call message back into the conversation.
         messages.append(
@@ -134,8 +179,13 @@ async def run_agent(
                     "content": result.get("for_model", "done"),
                 }
             )
+    else:
+        # Ran out of steps without a final (tool-call-free) reply.
+        reply = "I reached the step limit before fully finishing. Here is what I did."
+        messages.append({"role": "assistant", "content": reply})
 
     return {
-        "reply": "I reached the step limit before fully finishing. Here is what I did.",
+        "reply": reply,
         "actions": actions,
+        "conversation": _trim_history(messages[1:]),
     }

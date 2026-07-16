@@ -16,14 +16,19 @@ sava_endpoints = EndpointGroup("sava", __name__)
 async def sava_command(request: Request) -> Response:
     """Handle a natural-language command from the SAVA canvas.
 
-    Body: ``{"prompt": "<text>"}``
-    Returns: ``{"reply": str, "actions": [{tool, summary, ok, detail}]}``
+    Body: ``{"prompt": "<text>", "conversation": [...prior messages...]}``
+    Returns: ``{"reply": str, "actions": [{tool, summary, ok, detail}],
+    "conversation": [...updated history...]}``
+
+    The server is stateless: the client round-trips ``conversation`` so the
+    agent remembers prior turns (including what its tools did).
     """
     payload = await request.get_json()
     prompt = ((payload or {}).get("prompt") or "").strip()
+    history = (payload or {}).get("conversation")
 
     if not prompt:
-        return Response({"reply": "Please type a command.", "actions": []}, 400)
+        return Response({"reply": "Please type a command.", "actions": [], "conversation": history or []}, 400)
 
-    result = await run_agent(prompt, request.user)
+    result = await run_agent(prompt, request.user, history)
     return Response(result, 200)

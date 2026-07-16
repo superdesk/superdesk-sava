@@ -12,7 +12,7 @@ import {
 } from '@chatscope/chat-ui-kit-react';
 
 import {superdeskApi} from './superdeskApi';
-import {sendCommand, ISavaAction} from './api';
+import {sendCommand, ISavaAction, SavaConversation} from './api';
 
 const EXAMPLES: Array<string> = [
     'Create a text article with a headline and slugline and publish',
@@ -55,6 +55,7 @@ function ActionChips({actions}: {actions: Array<ISavaAction>}) {
 export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void}) {
     const {gettext} = superdeskApi.localization;
     const [messages, setMessages] = React.useState<Array<IChatMessage>>([]);
+    const [conversation, setConversation] = React.useState<SavaConversation>([]);
     const [loading, setLoading] = React.useState(false);
     const nextId = React.useRef(1);
 
@@ -69,8 +70,10 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
         setMessages((prev) => prev.concat(userMsg));
         setLoading(true);
 
-        sendCommand(prompt).then(
+        sendCommand(prompt, conversation).then(
             (result) => {
+                // Persist the server's updated conversation for the next turn.
+                setConversation(result.conversation);
                 setMessages((prev) => prev.concat({
                     id: nextId.current++,
                     role: 'assistant',
@@ -89,7 +92,15 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
                 setLoading(false);
             },
         );
-    }, [loading, gettext]);
+    }, [loading, conversation, gettext]);
+
+    const resetChat = React.useCallback(() => {
+        if (loading) {
+            return;
+        }
+        setMessages([]);
+        setConversation([]);
+    }, [loading]);
 
     const isEmpty = messages.length === 0;
 
@@ -99,6 +110,16 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
                 <ChatContainer>
                     <ConversationHeader>
                         <ConversationHeader.Content userName="SAVA" info={gettext('Ask me to do things in Superdesk')} />
+                        <ConversationHeader.Actions>
+                            <button
+                                className="btn btn--small"
+                                onClick={resetChat}
+                                disabled={loading || messages.length === 0}
+                                title={gettext('Start a new chat')}
+                            >
+                                {gettext('New chat')}
+                            </button>
+                        </ConversationHeader.Actions>
                     </ConversationHeader>
 
                     <MessageList
