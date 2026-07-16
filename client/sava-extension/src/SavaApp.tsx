@@ -34,7 +34,15 @@ function LinkButtons({links}: {links?: Array<ISavaLink>}) {
     return (
         <span className="sava-links">
             {links.map((l, i) => (
-                <a key={i} className="sava-link" href={'#' + l.route}>{l.label} ↗</a>
+                <a
+                    key={i}
+                    className="sava-link"
+                    href={window.location.origin + '/#' + l.route}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    {l.label} ↗
+                </a>
             ))}
         </span>
     );
