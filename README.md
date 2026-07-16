@@ -43,9 +43,17 @@ the agent's toolset with no wiring. Tools receive a `ToolContext` (current user 
 helpers like `link_to_item`) and return a `ToolResult` (`for_model` text for the
 LLM; `summary`/`links`/`data` for the UI).
 
-Current tools: `list_desks`, `list_content_profiles`, `describe_content_profile`,
-`create_article` (generic — takes a profile + fields), `publish_article`
-(confirmation-gated).
+Current tools, by domain:
+- **lookups** — `list_desks`, `list_stages`, `list_content_profiles`,
+  `describe_content_profile`, `find_user`, `list_categories`, `list_coverage_types`
+- **articles (read)** — `find_articles`, `find_my_articles`, `find_desk_items`,
+  `get_article`
+- **articles (write)** — `create_article`, `update_article`, `move_article`,
+  `spike_article` ⚠️, `publish_article` ⚠️
+- **planning** — `create_planning_item`, `add_coverage`, `search_planning`
+- **assignments** — `list_my_assignments`
+
+⚠️ = confirmation-gated (human-in-the-loop).
 
 ### Self-discovery
 

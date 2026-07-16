@@ -13,9 +13,10 @@ import {superdeskApi} from './superdeskApi';
 import {sendCommand, ISavaAction, ISavaLink, ISavaPending, ISavaResult, SavaConversation} from './api';
 
 const EXAMPLES: Array<string> = [
-    'Create a text article with a headline and slugline and publish',
-    'Show me all the articles that were authored by XYZ',
-    "Create a planning item for today with the topic 'AI conference' and add an image coverage to it",
+    'Show me the articles I have authored',
+    "What's on the Sports desk right now?",
+    "Create a planning item for today about the AI conference and add a text coverage",
+    'What are my assignments?',
 ];
 
 interface IChatMessage {

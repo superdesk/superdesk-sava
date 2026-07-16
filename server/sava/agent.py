@@ -28,17 +28,29 @@ Creating an article:
 and ask them which one (e.g. Text or Basic).
 - Call describe_content_profile to learn that profile's required fields, then ask the \
 user for any required field they haven't already provided.
-- Once you have what you need, call create_article with `profile` and a `fields` object.
+- Then call create_article with `profile` and a `fields` object.
 
-Publishing:
-- Publishing makes an article public. Just call publish_article when the user wants to \
-publish — the platform will ask them to confirm, so you don't need to ask yourself.
+Finding things:
+- Use find_articles / find_my_articles / find_desk_items to search. Pass desk and author \
+names directly — the tools resolve them. For relative dates use `date_filter` \
+(today / this_week / this_month) rather than guessing calendar dates.
+- To act on an existing article (edit, move, spike, publish) you need its id. If you \
+don't already have it from earlier in the conversation, find it first.
+
+Editing & workflow:
+- update_article changes fields; move_article sends it to a desk; spike_article removes \
+it. Publishing and spiking are confirmed by the platform, so just call the tool — do not \
+ask for confirmation yourself.
+
+Planning & assignments:
+- Use create_planning_item / add_coverage / search_planning for planning; coverage types \
+come from list_coverage_types. Use list_my_assignments for the user's assignments.
 
 General:
 - Only take actions the user asked for. If a request needs a capability you have no tool \
 for, say so briefly instead of guessing.
-- Keep replies short and factual. Refer to articles by their headline, not their raw id \
-(a link to open the item is shown to the user automatically)."""
+- Keep replies short and factual. Refer to items by their headline/slugline, not their \
+raw id (a link to open the item is shown to the user automatically)."""
 
 
 def _build_client():
