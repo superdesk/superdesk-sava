@@ -1,0 +1,33 @@
+/*
+ * SAVA overrides on top of the chatscope default theme.
+ *
+ * The host renders our page inside a `display: flex; height: 100%;` wrapper
+ * (sdExtensionPage). Our root needs flex-grow to fill it, otherwise it
+ * collapses to chatscope's intrinsic ~500px width. And chatscope sizes text
+ * from `.cs-main-container { font-size: 1rem }`, which is tiny under Superdesk's
+ * shrunk root font — so we pin an absolute size that cascades to messages/input.
+ */
+
+.sava-root {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+}
+
+.sava-root .cs-main-container {
+    flex: 1 1 auto;
+    width: 100%;
+    border: none;
+    font-size: 15px;
+}
+
+/* A touch more presence for the header and the empty-state suggestions. */
+.sava-root .cs-conversation-header__user-name {
+    font-size: 1.1em;
+}
+
+.sava-root .cs-message-input__content-editor,
+.sava-root .cs-message-input__content-editor-wrapper {
+    font-size: 1em;
+}

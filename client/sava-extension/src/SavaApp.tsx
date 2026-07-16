@@ -1,5 +1,6 @@
 import * as React from 'react';
 import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
+import './sava.css';
 import {
     MainContainer,
     ChatContainer,
@@ -93,7 +94,7 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
     const isEmpty = messages.length === 0;
 
     return (
-        <div style={{height: '100%', position: 'relative'}}>
+        <div className="sava-root">
             <MainContainer>
                 <ChatContainer>
                     <ConversationHeader>
