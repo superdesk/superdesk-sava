@@ -1,6 +1,17 @@
 import * as React from 'react';
+import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
+import {
+    MainContainer,
+    ChatContainer,
+    ConversationHeader,
+    MessageList,
+    Message,
+    MessageInput,
+    TypingIndicator,
+} from '@chatscope/chat-ui-kit-react';
+
 import {superdeskApi} from './superdeskApi';
-import {sendCommand, ISavaResult} from './api';
+import {sendCommand, ISavaAction} from './api';
 
 const EXAMPLES: Array<string> = [
     'Create a text article with a headline and slugline and publish',
@@ -8,173 +19,153 @@ const EXAMPLES: Array<string> = [
     "Create a planning item for today with the topic 'AI conference' and add an image coverage to it",
 ];
 
-interface IState {
-    prompt: string;
-    loading: boolean;
-    result: ISavaResult | null;
-    error: string | null;
+interface IChatMessage {
+    id: number;
+    role: 'user' | 'assistant';
+    text: string;
+    actions?: Array<ISavaAction>;
+    error?: boolean;
 }
 
-export class SavaApp extends React.Component<{setupFullWidthCapability: (config: any) => void}, IState> {
-    constructor(props: any) {
-        super(props);
-        this.state = {prompt: '', loading: false, result: null, error: null};
-        this.submit = this.submit.bind(this);
-        this.onKeyDown = this.onKeyDown.bind(this);
-    }
+function ActionChips({actions}: {actions: Array<ISavaAction>}) {
+    return (
+        <div style={{display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8}}>
+            {actions.map((a, i) => (
+                <span
+                    key={i}
+                    title={a.detail || ''}
+                    style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '3px 10px', borderRadius: 12, fontSize: 12,
+                        background: a.ok ? 'rgba(46,125,50,0.12)' : 'rgba(198,40,40,0.12)',
+                        color: a.ok ? '#2e7d32' : '#c62828',
+                        border: `1px solid ${a.ok ? 'rgba(46,125,50,0.35)' : 'rgba(198,40,40,0.35)'}`,
+                    }}
+                >
+                    <span>{a.ok ? '✓' : '✕'}</span>
+                    <code style={{background: 'transparent'}}>{a.tool}</code>
+                    <span>{a.summary}</span>
+                </span>
+            ))}
+        </div>
+    );
+}
 
-    submit() {
-        const prompt = this.state.prompt.trim();
+export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void}) {
+    const {gettext} = superdeskApi.localization;
+    const [messages, setMessages] = React.useState<Array<IChatMessage>>([]);
+    const [loading, setLoading] = React.useState(false);
+    const nextId = React.useRef(1);
 
-        if (prompt.length === 0 || this.state.loading) {
+    const submit = React.useCallback((raw: string) => {
+        const prompt = (raw || '').trim();
+
+        if (prompt.length === 0 || loading) {
             return;
         }
 
-        this.setState({loading: true, error: null, result: null});
+        const userMsg: IChatMessage = {id: nextId.current++, role: 'user', text: prompt};
+        setMessages((prev) => prev.concat(userMsg));
+        setLoading(true);
 
         sendCommand(prompt).then(
-            (result) => this.setState({loading: false, result}),
-            (err) => this.setState({
-                loading: false,
-                error: (err && (err.message || err.error)) || 'Something went wrong talking to the agent.',
-            }),
+            (result) => {
+                setMessages((prev) => prev.concat({
+                    id: nextId.current++,
+                    role: 'assistant',
+                    text: result.reply,
+                    actions: result.actions,
+                }));
+                setLoading(false);
+            },
+            (err) => {
+                setMessages((prev) => prev.concat({
+                    id: nextId.current++,
+                    role: 'assistant',
+                    error: true,
+                    text: (err && (err.message || err.error)) || gettext('Something went wrong talking to the agent.'),
+                }));
+                setLoading(false);
+            },
         );
-    }
+    }, [loading, gettext]);
 
-    onKeyDown(e: React.KeyboardEvent) {
-        // Cmd/Ctrl + Enter submits
-        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-            e.preventDefault();
-            this.submit();
-        }
-    }
+    const isEmpty = messages.length === 0;
 
-    render() {
-        const {gettext} = superdeskApi.localization;
-        const {prompt, loading, result, error} = this.state;
+    return (
+        <div style={{height: '100%', position: 'relative'}}>
+            <MainContainer>
+                <ChatContainer>
+                    <ConversationHeader>
+                        <ConversationHeader.Content userName="SAVA" info={gettext('Ask me to do things in Superdesk')} />
+                    </ConversationHeader>
 
-        return (
-            <div style={{height: '100%', overflowY: 'auto', background: 'var(--sd-colour-bg__sidebar, #f8f8f8)'}}>
-                <div style={{maxWidth: 720, margin: '0 auto', padding: '48px 24px 64px'}}>
-                    <h1 style={{fontSize: 28, fontWeight: 300, marginBottom: 8, textAlign: 'center'}}>
-                        {gettext('What would you like to do?')}
-                    </h1>
-                    <p style={{textAlign: 'center', opacity: 0.6, marginBottom: 24}}>
-                        {gettext('Describe it in plain language and SAVA will do it for you.')}
-                    </p>
-
-                    <textarea
-                        autoFocus
-                        value={prompt}
-                        disabled={loading}
-                        onChange={(e) => this.setState({prompt: e.target.value})}
-                        onKeyDown={this.onKeyDown}
-                        placeholder={gettext('e.g. Create a text article with the headline "Messi goes to the finals" and publish it')}
-                        style={{
-                            width: '100%', minHeight: 96, padding: 16, fontSize: 16,
-                            borderRadius: 8, border: '1px solid var(--sd-colour-line--medium, #d0d0d0)',
-                            resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit',
-                        }}
-                    />
-
-                    <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: 12}}>
-                        <button
-                            className="btn btn--primary"
-                            disabled={loading || prompt.trim().length === 0}
-                            onClick={this.submit}
-                        >
-                            {loading ? gettext('Working…') : gettext('Send')}
-                        </button>
-                    </div>
-
-                    {result == null && error == null && (
-                        <div style={{marginTop: 32}}>
-                            <div style={{fontSize: 12, textTransform: 'uppercase', opacity: 0.5, marginBottom: 8}}>
-                                {gettext('Examples')}
-                            </div>
-                            {EXAMPLES.map((ex, i) => (
-                                <button
-                                    key={i}
-                                    onClick={() => this.setState({prompt: ex})}
-                                    style={{
-                                        display: 'block', width: '100%', textAlign: 'left', marginBottom: 8,
-                                        padding: '12px 16px', borderRadius: 8, cursor: 'pointer',
-                                        border: '1px solid var(--sd-colour-line--light, #e0e0e0)',
-                                        background: 'var(--sd-colour-bg, #fff)', fontSize: 14,
-                                    }}
-                                >
-                                    {ex}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-
-                    {error != null && (
-                        <div
-                            style={{
-                                marginTop: 24, padding: 16, borderRadius: 8,
-                                background: 'var(--sd-colour-alert--025, #fdecea)',
-                                border: '1px solid var(--sd-colour-alert, #e57373)',
-                            }}
-                        >
-                            <strong>{gettext('Error')}: </strong>{error}
-                        </div>
-                    )}
-
-                    {result != null && (
-                        <div style={{marginTop: 24}}>
+                    <MessageList
+                        typingIndicator={
+                            loading ? <TypingIndicator content={gettext('SAVA is working…')} /> : undefined
+                        }
+                    >
+                        {isEmpty ? (
                             <div
                                 style={{
-                                    padding: 16, borderRadius: 8, marginBottom: 16,
-                                    background: 'var(--sd-colour-bg, #fff)',
-                                    border: '1px solid var(--sd-colour-line--light, #e0e0e0)',
+                                    height: '100%', display: 'flex', flexDirection: 'column',
+                                    justifyContent: 'center', alignItems: 'center', textAlign: 'center',
+                                    padding: 24, gap: 6,
                                 }}
                             >
-                                {result.reply}
-                            </div>
-
-                            {result.actions.length > 0 && (
-                                <div>
-                                    <div style={{fontSize: 12, textTransform: 'uppercase', opacity: 0.5, marginBottom: 8}}>
-                                        {gettext('Actions')}
-                                    </div>
-                                    {result.actions.map((a, i) => (
-                                        <div
+                                <h1 style={{fontSize: 26, fontWeight: 300, margin: 0}}>
+                                    {gettext('What would you like to do?')}
+                                </h1>
+                                <p style={{opacity: 0.6, marginTop: 0, marginBottom: 12}}>
+                                    {gettext('Describe it in plain language and SAVA will do it for you.')}
+                                </p>
+                                <div style={{display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 520}}>
+                                    {EXAMPLES.map((ex, i) => (
+                                        <button
                                             key={i}
+                                            onClick={() => submit(ex)}
                                             style={{
-                                                display: 'flex', alignItems: 'flex-start', gap: 10,
-                                                padding: '10px 14px', marginBottom: 6, borderRadius: 6,
-                                                background: 'var(--sd-colour-bg, #fff)',
+                                                textAlign: 'left', padding: '12px 16px', borderRadius: 8, cursor: 'pointer',
                                                 border: '1px solid var(--sd-colour-line--light, #e0e0e0)',
+                                                background: 'var(--sd-colour-bg, #fff)', fontSize: 14,
                                             }}
                                         >
-                                            <span style={{color: a.ok ? '#2e7d32' : '#c62828'}}>
-                                                {a.ok ? '✓' : '✕'}
-                                            </span>
-                                            <span style={{flex: 1}}>
-                                                <code style={{opacity: 0.6, marginRight: 8}}>{a.tool}</code>
-                                                {a.summary}
-                                                {a.detail != null && (
-                                                    <div style={{opacity: 0.6, fontSize: 13, marginTop: 2}}>{a.detail}</div>
-                                                )}
-                                            </span>
-                                        </div>
+                                            {ex}
+                                        </button>
                                     ))}
                                 </div>
-                            )}
-
-                            <div style={{marginTop: 16}}>
-                                <button
-                                    className="btn"
-                                    onClick={() => this.setState({prompt: '', result: null, error: null})}
-                                >
-                                    {gettext('New command')}
-                                </button>
                             </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
-    }
+                        ) : (
+                            messages.map((m) => (
+                                <Message
+                                    key={m.id}
+                                    model={{
+                                        direction: m.role === 'user' ? 'outgoing' : 'incoming',
+                                        position: 'single',
+                                    }}
+                                >
+                                    <Message.CustomContent>
+                                        <div style={{whiteSpace: 'pre-wrap', color: m.error ? '#c62828' : undefined}}>
+                                            {m.text}
+                                        </div>
+                                        {m.actions != null && m.actions.length > 0 && (
+                                            <ActionChips actions={m.actions} />
+                                        )}
+                                    </Message.CustomContent>
+                                </Message>
+                            ))
+                        )}
+                    </MessageList>
+
+                    <MessageInput
+                        placeholder={gettext('Message SAVA…')}
+                        onSend={(_html: string, textContent: string) => submit(textContent)}
+                        attachButton={false}
+                        disabled={loading}
+                        autoFocus
+                    />
+                </ChatContainer>
+            </MainContainer>
+        </div>
+    );
 }
