@@ -3,6 +3,7 @@ from typing import Any, Dict
 import superdesk
 
 from ..base import ToolContext, ToolLink, ToolResult, tool
+from ..lookups import valid_iso_datetime
 
 
 def _default_timezone() -> str:
@@ -40,10 +41,23 @@ async def create_event(args, ctx: ToolContext) -> ToolResult:
     start = (args.get("start") or "").strip()
     if not name or not start:
         return ToolResult(ok=False, summary="Missing input", for_model="An event needs a name and a start datetime.")
+    if not valid_iso_datetime(start):
+        return ToolResult(
+            ok=False,
+            summary="Invalid start",
+            for_model=f"start '{start}' is not a valid ISO-8601 datetime (e.g. 2026-07-30T09:00:00).",
+        )
+
+    end = (args.get("end") or "").strip()
+    if end and not valid_iso_datetime(end):
+        return ToolResult(
+            ok=False,
+            summary="Invalid end",
+            for_model=f"end '{end}' is not a valid ISO-8601 datetime (e.g. 2026-07-30T10:00:00).",
+        )
 
     tz = (args.get("timezone") or "").strip() or _default_timezone()
     dates: Dict[str, Any] = {"start": start, "tz": tz}
-    end = (args.get("end") or "").strip()
     dates["end"] = end or start
 
     item: Dict[str, Any] = {"name": name, "dates": dates}

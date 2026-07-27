@@ -94,6 +94,12 @@ def tool(
     """Register an async handler as a SAVA tool."""
 
     def decorator(fn: ToolHandler) -> ToolHandler:
+        if name in _REGISTRY:
+            logger.warning(
+                "SAVA: tool name '%s' is already registered; %s is overriding it.",
+                name,
+                fn.__module__,
+            )
         _REGISTRY[name] = Tool(
             name=name,
             description=description,

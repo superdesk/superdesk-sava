@@ -1,5 +1,6 @@
 """Shared, non-tool helpers used by multiple SAVA tools."""
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import superdesk
@@ -7,6 +8,27 @@ from eve.utils import ParsedRequest
 from superdesk.core import json
 
 from .base import ToolContext, ToolResult
+
+
+def valid_iso_datetime(value: Any) -> bool:
+    """True if ``value`` is a parseable ISO-8601 datetime string.
+
+    Accepts a trailing 'Z' (Python 3.10's ``fromisoformat`` does not). Used to
+    reject a model-hallucinated date with a clean error instead of a 500 from the
+    resource layer.
+    """
+    if not isinstance(value, str):
+        return False
+    text = value.strip()
+    if not text:
+        return False
+    if text[-1] in ("Z", "z"):
+        text = text[:-1] + "+00:00"
+    try:
+        datetime.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
 
 
 # --- desks / stages / users / profiles -------------------------------------

@@ -3,6 +3,7 @@ from typing import Any, Dict
 import superdesk
 
 from ..base import ToolContext, ToolLink, ToolResult, tool
+from ..lookups import valid_iso_datetime
 
 
 @tool(
@@ -32,6 +33,15 @@ async def update_event(args, ctx: ToolContext) -> ToolResult:
     event = await service.find_one_async(req=None, _id=event_id)
     if event is None:
         return ToolResult(ok=False, summary="Event not found", for_model=f"No event with id {event_id}.")
+
+    for field_name in ("start", "end"):
+        value = (args.get(field_name) or "").strip()
+        if value and not valid_iso_datetime(value):
+            return ToolResult(
+                ok=False,
+                summary=f"Invalid {field_name}",
+                for_model=f"{field_name} '{value}' is not a valid ISO-8601 datetime.",
+            )
 
     updates: Dict[str, Any] = {}
     if args.get("name"):

@@ -34,10 +34,16 @@ async def sava_command(request: Request) -> Response:
     The server is stateless: the client round-trips ``conversation`` (so the agent
     remembers prior turns) and ``pending`` confirmations resolve via ``decision``.
     """
-    payload = await request.get_json()
-    prompt = ((payload or {}).get("prompt") or "").strip()
-    history = (payload or {}).get("conversation")
-    decision = (payload or {}).get("decision")
+    try:
+        payload = await request.get_json()
+    except Exception:  # noqa: BLE001 - a malformed/non-JSON body should not 500
+        payload = None
+    if not isinstance(payload, dict):
+        payload = {}
+
+    prompt = (payload.get("prompt") or "").strip()
+    history = payload.get("conversation")
+    decision = payload.get("decision")
 
     if not prompt and not decision:
         return Response(
@@ -45,5 +51,17 @@ async def sava_command(request: Request) -> Response:
             400,
         )
 
-    result = await run_agent(prompt, request.user, history, decision)
+    try:
+        result = await run_agent(prompt, request.user, history, decision)
+    except Exception:  # noqa: BLE001 - never leak a raw traceback to the canvas
+        logger.exception("SAVA command failed")
+        return Response(
+            {
+                "reply": "Something went wrong handling that. Please try again.",
+                "actions": [],
+                "conversation": history or [],
+                "pending": None,
+            },
+            500,
+        )
     return Response(result, 200)
