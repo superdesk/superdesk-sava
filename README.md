@@ -50,7 +50,8 @@ Current tools, by domain:
   `get_article`
 - **articles (write)** — `create_article`, `update_article`, `move_article`,
   `spike_article` ⚠️, `publish_article` ⚠️
-- **planning** — `create_planning_item`, `add_coverage`, `search_planning`
+- **planning** — `describe_planning_profile`, `create_planning_item`, `add_coverage`,
+  `search_planning`
 - **events** — `create_event`, `update_event`, `search_events`,
   `link_event_to_planning`, `post_event` ⚠️
 - **assignments** — `list_my_assignments`
@@ -59,10 +60,14 @@ Current tools, by domain:
 
 ### Self-discovery
 
-Nothing is hardcoded. The agent discovers content profiles and their required
-fields at runtime (`list_content_profiles` → `describe_content_profile`) and asks
-the user for whatever a given profile needs, so new profiles/fields work with no
-code change.
+Nothing is hardcoded. The agent discovers required fields at runtime from the
+instance's own profiles — articles via `content_types`
+(`list_content_profiles` → `describe_content_profile`) and events / planning /
+coverages via `planning_types` (`describe_planning_profile`) — and asks the user
+for whatever a given profile needs. Requirements differ per deployment (Superdesk
+vs superdesk-cp vs superdesk-stt) and can change on the fly, so create tools also
+accept a generic `fields` object to carry any instance-specific field with no code
+change.
 
 ### Human-in-the-loop
 

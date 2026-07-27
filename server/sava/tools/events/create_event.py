@@ -32,6 +32,13 @@ def _default_timezone() -> str:
             "slugline": {"type": "string"},
             "description_short": {"type": "string"},
             "location": {"type": "string", "description": "Free-text location name. Optional."},
+            "fields": {
+                "type": "object",
+                "description": (
+                    "Any other event fields this instance requires (see "
+                    "describe_planning_profile 'event'), e.g. {\"language\": \"en\"}."
+                ),
+            },
         },
         "required": ["name", "start"],
     },
@@ -67,6 +74,13 @@ async def create_event(args, ctx: ToolContext) -> ToolResult:
         item["definition_short"] = args["description_short"]
     if args.get("location"):
         item["location"] = [{"name": args["location"]}]
+
+    # Any instance-specific fields the model gathered from describe_planning_profile.
+    extra = args.get("fields")
+    if isinstance(extra, dict):
+        for key, value in extra.items():
+            if value is not None and key not in item:
+                item[key] = value
 
     await superdesk.get_resource_service("events").post_async([item])
     event_id = str(item["_id"])

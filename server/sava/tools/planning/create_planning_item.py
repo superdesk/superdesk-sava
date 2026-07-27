@@ -37,6 +37,13 @@ def _build_coverage(spec: Dict[str, Any]) -> Dict[str, Any]:
                 "items": {"type": "object"},
                 "description": 'Optional coverages, e.g. [{"g2_content_type": "text", "slugline": "ai-conf"}].',
             },
+            "fields": {
+                "type": "object",
+                "description": (
+                    "Any other planning fields this instance requires (see "
+                    "describe_planning_profile 'planning'), e.g. {\"language\": \"en\"}."
+                ),
+            },
         },
         "required": ["slugline"],
     },
@@ -57,6 +64,13 @@ async def create_planning_item(args, ctx: ToolContext) -> ToolResult:
     coverages = args.get("coverages")
     if isinstance(coverages, list) and coverages:
         item["coverages"] = [_build_coverage(c) for c in coverages if isinstance(c, dict)]
+
+    # Any instance-specific fields the model gathered from describe_planning_profile.
+    extra = args.get("fields")
+    if isinstance(extra, dict):
+        for key, value in extra.items():
+            if value is not None and key not in item:
+                item[key] = value
 
     await superdesk.get_resource_service("planning").post_async([item])
     planning_id = str(item["_id"])

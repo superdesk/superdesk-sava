@@ -1,5 +1,5 @@
 from ..base import ToolContext, ToolResult, tool
-from ..lookups import get_content_profile
+from ..lookups import get_content_profile, split_required_optional
 
 
 @tool(
@@ -30,15 +30,7 @@ async def describe_content_profile(args, ctx: ToolContext) -> ToolResult:
             for_model=f"No content profile matched '{identifier}'.",
         )
 
-    schema = profile.get("schema") or {}
-    required, optional = [], []
-    for field_name, cfg in schema.items():
-        if cfg is None:
-            continue
-        if isinstance(cfg, dict) and cfg.get("required"):
-            required.append(field_name)
-        else:
-            optional.append(field_name)
+    required, optional = split_required_optional(profile.get("schema"))
 
     label = profile.get("label") or str(profile.get("_id"))
     return ToolResult(

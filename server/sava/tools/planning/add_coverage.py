@@ -19,6 +19,13 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
             "coverage_type": {"type": "string", "description": "g2_content_type qcode, e.g. 'text', 'picture'."},
             "slugline": {"type": "string", "description": "Coverage slugline. Optional."},
             "scheduled": {"type": "string", "description": "ISO datetime the coverage is due. Optional."},
+            "fields": {
+                "type": "object",
+                "description": (
+                    "Any other coverage fields this instance requires (see "
+                    "describe_planning_profile 'coverage'), e.g. {\"language\": \"en\"}."
+                ),
+            },
         },
         "required": ["planning_id", "coverage_type"],
     },
@@ -40,6 +47,13 @@ async def add_coverage(args, ctx: ToolContext) -> ToolResult:
         planning["slugline"] = args["slugline"]
     if args.get("scheduled"):
         planning["scheduled"] = args["scheduled"]
+
+    extra = args.get("fields")
+    if isinstance(extra, dict):
+        for key, value in extra.items():
+            if value is not None and key not in planning:
+                planning[key] = value
+
     coverages.append({"planning": planning})
 
     await service.patch_async(planning_id, {"coverages": coverages})

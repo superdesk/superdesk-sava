@@ -104,6 +104,38 @@ async def get_content_profile(identifier: str) -> Optional[Dict[str, Any]]:
     return profile
 
 
+async def get_planning_profile(name: str) -> Optional[Dict[str, Any]]:
+    """Fetch a planning profile from ``planning_types`` by name.
+
+    The name is one of 'event', 'planning', or 'coverage' (that is also the doc
+    ``_id``). These profiles are configured per-instance and can change on the
+    fly, so tools read them at runtime rather than assuming a fixed field set.
+    """
+    service = superdesk.get_resource_service("planning_types")
+    profile = await service.find_one_async(req=None, _id=name)
+    if profile is None:
+        profile = await service.find_one_async(req=None, name=name)
+    return profile
+
+
+def split_required_optional(schema: Optional[Dict[str, Any]]) -> Tuple[List[str], List[str]]:
+    """Split a profile ``schema`` dict into (required, optional) field-name lists.
+
+    A field is required when its config is a dict with a truthy ``required`` key —
+    the shape used by both content_types and planning_types.
+    """
+    required: List[str] = []
+    optional: List[str] = []
+    for field_name, cfg in (schema or {}).items():
+        if cfg is None:
+            continue
+        if isinstance(cfg, dict) and cfg.get("required"):
+            required.append(field_name)
+        else:
+            optional.append(field_name)
+    return required, optional
+
+
 # --- article search --------------------------------------------------------
 
 

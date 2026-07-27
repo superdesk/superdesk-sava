@@ -53,6 +53,12 @@ it. Publishing and spiking are confirmed by the platform, so just call the tool 
 ask for confirmation yourself.
 
 Planning, events & assignments:
+- Requirements for events, planning items and coverages are configured per-instance and \
+can change. Before creating one, call describe_planning_profile (event / planning / \
+coverage) to learn which fields are required, and ask the user for any required field \
+they haven't provided — do not assume a fixed set.
+- Pass fields the tool doesn't have a named parameter for via the `fields` object (e.g. \
+{"language": "en"}).
 - Use create_planning_item / add_coverage / search_planning for planning; coverage types \
 come from list_coverage_types.
 - Use create_event / update_event / search_events for calendar events, \
