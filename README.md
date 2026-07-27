@@ -1,5 +1,7 @@
 # Superdesk SAVA
 
+[![CI](https://github.com/BrianMwangi21/superdesk-sava/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/BrianMwangi21/superdesk-sava/actions/workflows/ci.yml)
+
 **SAVA** boils Superdesk down to a single text box. Using natural language, a user
 can ask the system to do things — *"create a text article with the headline 'Messi
 goes to the finals' and publish it"* — and an LLM agent translates that into real
@@ -142,6 +144,17 @@ Superdesk services (the LLM and resource calls are never hit).
 pip install -r dev-requirements.txt   # pytest + pytest-asyncio
 pytest                                 # config lives in setup.cfg
 ```
+
+### CI
+
+`.github/workflows/ci.yml` runs on every push to `develop`/`main` and on PRs:
+
+- **Lint & types** — `black --check`, `flake8`, `mypy`. No Superdesk install, so
+  it's fast and always reliable.
+- **Tests** — installs `superdesk-core` and `superdesk-planning` from their
+  moving `develop` branches, then runs `pytest`. This is deliberate: the job
+  doubles as an integration canary, so if an upstream change breaks SAVA the
+  build goes red and we find out immediately rather than during a demo.
 
 ## Status
 
