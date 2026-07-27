@@ -10,7 +10,10 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
     parameters={
         "type": "object",
         "properties": {
-            "state": {"type": "string", "description": "Optional assignment state filter, e.g. 'assigned', 'in_progress'."},
+            "state": {
+                "type": "string",
+                "description": "Optional assignment state filter, e.g. 'assigned', 'in_progress'.",
+            },
             "size": {"type": "integer", "description": "Max results (default 25)."},
         },
     },
@@ -36,7 +39,9 @@ async def list_my_assignments(args, ctx: ToolContext) -> ToolResult:
             break
 
     if not items:
-        return ToolResult(ok=True, summary="No assignments", for_model="You have no assignments matching that.", data={"count": 0})
+        return ToolResult(
+            ok=True, summary="No assignments", for_model="You have no assignments matching that.", data={"count": 0}
+        )
 
     lines = []
     for a in items:

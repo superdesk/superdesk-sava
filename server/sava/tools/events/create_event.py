@@ -28,7 +28,10 @@ def _default_timezone() -> str:
             "name": {"type": "string"},
             "start": {"type": "string", "description": "ISO datetime for the event start."},
             "end": {"type": "string", "description": "ISO datetime for the event end. Optional."},
-            "timezone": {"type": "string", "description": "IANA tz e.g. 'Europe/Prague'. Optional; instance default used if omitted."},
+            "timezone": {
+                "type": "string",
+                "description": "IANA tz e.g. 'Europe/Prague'. Optional; instance default used if omitted.",
+            },
             "slugline": {"type": "string"},
             "description_short": {"type": "string"},
             "location": {"type": "string", "description": "Free-text location name. Optional."},
@@ -36,7 +39,7 @@ def _default_timezone() -> str:
                 "type": "object",
                 "description": (
                     "Any other event fields this instance requires (see "
-                    "describe_planning_profile 'event'), e.g. {\"language\": \"en\"}."
+                    'describe_planning_profile \'event\'), e.g. {"language": "en"}.'
                 ),
             },
         },

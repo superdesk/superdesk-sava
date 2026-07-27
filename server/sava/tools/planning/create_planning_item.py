@@ -41,7 +41,7 @@ def _build_coverage(spec: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "object",
                 "description": (
                     "Any other planning fields this instance requires (see "
-                    "describe_planning_profile 'planning'), e.g. {\"language\": \"en\"}."
+                    'describe_planning_profile \'planning\'), e.g. {"language": "en"}.'
                 ),
             },
         },
@@ -51,7 +51,9 @@ def _build_coverage(spec: Dict[str, Any]) -> Dict[str, Any]:
 async def create_planning_item(args, ctx: ToolContext) -> ToolResult:
     slugline = (args.get("slugline") or "").strip()
     if not slugline:
-        return ToolResult(ok=False, summary="No slugline", for_model="A slugline is required to create a planning item.")
+        return ToolResult(
+            ok=False, summary="No slugline", for_model="A slugline is required to create a planning item."
+        )
 
     item: Dict[str, Any] = {
         "slugline": slugline,

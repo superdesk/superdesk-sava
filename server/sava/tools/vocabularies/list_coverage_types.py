@@ -10,15 +10,9 @@ from ..base import ToolContext, ToolResult, tool
     parameters={"type": "object", "properties": {}},
 )
 async def list_coverage_types(args, ctx: ToolContext) -> ToolResult:
-    vocab = await superdesk.get_resource_service("vocabularies").find_one_async(
-        req=None, _id="g2_content_type"
-    )
+    vocab = await superdesk.get_resource_service("vocabularies").find_one_async(req=None, _id="g2_content_type")
     items = (vocab or {}).get("items") or []
-    types = [
-        {"qcode": i.get("qcode"), "name": i.get("name")}
-        for i in items
-        if i.get("is_active", True)
-    ]
+    types = [{"qcode": i.get("qcode"), "name": i.get("name")} for i in items if i.get("is_active", True)]
     listing = ", ".join(f"{t['name']} ({t['qcode']})" for t in types) or "(none)"
     return ToolResult(
         ok=True,

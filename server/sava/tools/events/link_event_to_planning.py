@@ -32,7 +32,9 @@ async def link_event_to_planning(args, ctx: ToolContext) -> ToolResult:
         return ToolResult(ok=False, summary="Event not found", for_model=f"No event with id {event_id}.")
     plan = await planning_service.find_one_async(req=None, _id=planning_id)
     if plan is None:
-        return ToolResult(ok=False, summary="Planning item not found", for_model=f"No planning item with id {planning_id}.")
+        return ToolResult(
+            ok=False, summary="Planning item not found", for_model=f"No planning item with id {planning_id}."
+        )
 
     related = list(plan.get("related_events") or [])
     if any((r.get("_id") == event_id) for r in related):

@@ -7,7 +7,7 @@ import superdesk
 from eve.utils import ParsedRequest
 from superdesk.core import json
 
-from .base import ToolContext, ToolResult
+from .base import ToolContext, ToolLink, ToolResult
 
 
 def valid_iso_datetime(value: Any) -> bool:
@@ -178,7 +178,7 @@ def format_article_results(
 ) -> ToolResult:
     """Turn a list of found items into a ToolResult (summary lines + open links)."""
     lines: List[str] = []
-    links = []
+    links: List[ToolLink] = []
     for item in items:
         headline = item.get("headline") or item.get("slugline") or "(untitled)"
         state = item.get("state") or "?"

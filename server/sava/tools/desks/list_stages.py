@@ -25,9 +25,7 @@ async def list_stages(args, ctx: ToolContext) -> ToolResult:
             for_model=f"No desk matched '{args.get('desk')}'.",
         )
 
-    cursor = await superdesk.get_resource_service("stages").get_async(
-        req=None, lookup={"desk": desk["_id"]}
-    )
+    cursor = await superdesk.get_resource_service("stages").get_async(req=None, lookup={"desk": desk["_id"]})
     stages = [{"id": str(s.get("_id")), "name": s.get("name")} async for s in cursor]
     listing = ", ".join(f"{s['name']} (id={s['id']})" for s in stages) or "(none)"
     return ToolResult(

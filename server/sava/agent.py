@@ -86,8 +86,7 @@ def _system_prompt() -> str:
     except Exception:  # noqa: BLE001
         pass
     return (
-        SYSTEM_PROMPT
-        + f"\n\nContext: the current date/time is {now.isoformat()} (UTC); the instance "
+        SYSTEM_PROMPT + f"\n\nContext: the current date/time is {now.isoformat()} (UTC); the instance "
         f"timezone is {tz}. Use these to compute relative dates like 'today' or 'Friday'."
     )
 
@@ -187,11 +186,13 @@ async def _resolve_tool_calls(
             return _build_pending(tc_id, t, args, ctx)
 
         if tc_id in denied:
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tc_id,
-                "content": "The user declined to perform this action.",
-            })
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc_id,
+                    "content": "The user declined to perform this action.",
+                }
+            )
             actions.append({"tool": name, "ok": False, "summary": "Cancelled by user", "detail": None, "links": []})
             continue
 
@@ -287,18 +288,20 @@ async def run_agent(
 
         # Append the assistant's tool-call message; the loop resolves it on the
         # next iteration (step 1).
-        messages.append({
-            "role": "assistant",
-            "content": message.content or "",
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                }
-                for tc in tool_calls
-            ],
-        })
+        messages.append(
+            {
+                "role": "assistant",
+                "content": message.content or "",
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    }
+                    for tc in tool_calls
+                ],
+            }
+        )
 
     return {
         "reply": "I reached the step limit before fully finishing. Here is what I did.",

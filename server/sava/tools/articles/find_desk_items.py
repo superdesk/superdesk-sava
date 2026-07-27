@@ -1,3 +1,5 @@
+from typing import Any, Dict, List
+
 from ..base import ToolContext, ToolResult, tool
 from ..lookups import find_desk, format_article_results, run_article_search
 
@@ -25,7 +27,7 @@ async def find_desk_items(args, ctx: ToolContext) -> ToolResult:
     if desk is None:
         return ToolResult(ok=False, summary="Desk not found", for_model=f"No desk matched '{desk_name}'.")
 
-    must = [{"term": {"task.desk": str(desk["_id"])}}]
+    must: List[Dict[str, Any]] = [{"term": {"task.desk": str(desk["_id"])}}]
     states = args.get("states")
     if isinstance(states, list) and states:
         must.append({"terms": {"state": states}})

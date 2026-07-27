@@ -23,7 +23,7 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
                 "type": "object",
                 "description": (
                     "Any other coverage fields this instance requires (see "
-                    "describe_planning_profile 'coverage'), e.g. {\"language\": \"en\"}."
+                    'describe_planning_profile \'coverage\'), e.g. {"language": "en"}.'
                 ),
             },
         },
@@ -39,7 +39,9 @@ async def add_coverage(args, ctx: ToolContext) -> ToolResult:
     service = superdesk.get_resource_service("planning")
     item = await service.find_one_async(req=None, _id=planning_id)
     if item is None:
-        return ToolResult(ok=False, summary="Planning item not found", for_model=f"No planning item with id {planning_id}.")
+        return ToolResult(
+            ok=False, summary="Planning item not found", for_model=f"No planning item with id {planning_id}."
+        )
 
     coverages = list(item.get("coverages") or [])
     planning: Dict[str, Any] = {"g2_content_type": coverage_type}
@@ -60,7 +62,10 @@ async def add_coverage(args, ctx: ToolContext) -> ToolResult:
     return ToolResult(
         ok=True,
         summary=f"Added {coverage_type} coverage",
-        for_model=f"Added a {coverage_type} coverage to planning item id={planning_id} (now {len(coverages)} coverage(s)).",
+        for_model=(
+            f"Added a {coverage_type} coverage to planning item id={planning_id} "
+            f"(now {len(coverages)} coverage(s))."
+        ),
         data={"planning_id": planning_id, "coverages": len(coverages)},
         links=[ToolLink(label="Open planning", route="/planning")],
     )

@@ -21,9 +21,7 @@ async def post_event(args, ctx: ToolContext) -> ToolResult:
     if not event_id:
         return ToolResult(ok=False, summary="No id", for_model="Error: event_id is required.")
 
-    await superdesk.get_resource_service("events_post").create_async(
-        [{"event": event_id, "pubstatus": "usable"}]
-    )
+    await superdesk.get_resource_service("events_post").create_async([{"event": event_id, "pubstatus": "usable"}])
     return ToolResult(
         ok=True,
         summary="Posted event",

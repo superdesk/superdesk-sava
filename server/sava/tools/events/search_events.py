@@ -1,4 +1,5 @@
 from datetime import timedelta
+from typing import Any, Dict, List
 
 import superdesk
 from superdesk.utc import utcnow
@@ -20,7 +21,7 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
     },
 )
 async def search_events(args, ctx: ToolContext) -> ToolResult:
-    conditions = [{"state": {"$ne": "spiked"}}]
+    conditions: List[Dict[str, Any]] = [{"state": {"$ne": "spiked"}}]
 
     text = (args.get("query") or "").strip()
     if text:
@@ -57,7 +58,8 @@ async def search_events(args, ctx: ToolContext) -> ToolResult:
         return ToolResult(ok=True, summary="No events found", for_model="No events matched.", data={"count": 0})
 
     lines = [
-        f"- {e.get('name') or e.get('slugline') or '(unnamed)'} — {(e.get('dates') or {}).get('start')} (id={e.get('_id')})"
+        f"- {e.get('name') or e.get('slugline') or '(unnamed)'} — "
+        f"{(e.get('dates') or {}).get('start')} (id={e.get('_id')})"
         for e in items
     ]
     return ToolResult(

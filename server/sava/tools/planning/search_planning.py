@@ -52,7 +52,9 @@ async def search_planning(args, ctx: ToolContext) -> ToolResult:
             break
 
     if not items:
-        return ToolResult(ok=True, summary="No planning items found", for_model="No planning items matched.", data={"count": 0})
+        return ToolResult(
+            ok=True, summary="No planning items found", for_model="No planning items matched.", data={"count": 0}
+        )
 
     lines = [
         f"- {i.get('slugline') or i.get('headline') or '(untitled)'} — {i.get('planning_date')} "

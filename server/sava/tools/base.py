@@ -31,9 +31,7 @@ class ToolContext:
 
     user: Optional[Dict[str, Any]] = None
 
-    def link_to_item(
-        self, item_id: str, action: str = "edit", label: str = "Open in monitoring"
-    ) -> ToolLink:
+    def link_to_item(self, item_id: str, action: str = "edit", label: str = "Open in monitoring") -> ToolLink:
         return ToolLink(label=label, route=f"/workspace/monitoring?item={item_id}&action={action}")
 
 

@@ -13,7 +13,10 @@ from ..lookups import find_desk
         "properties": {
             "article_id": {"type": "string"},
             "desk": {"type": "string", "description": "Target desk name."},
-            "stage": {"type": "string", "description": "Target stage name. Optional; defaults to the desk's incoming stage."},
+            "stage": {
+                "type": "string",
+                "description": "Target stage name. Optional; defaults to the desk's incoming stage.",
+            },
         },
         "required": ["article_id", "desk"],
     },

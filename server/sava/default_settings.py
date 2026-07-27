@@ -48,4 +48,4 @@ def get_int_setting(name: str, minimum: int = 1) -> int:
     try:
         return max(minimum, int(get_setting(name)))
     except (TypeError, ValueError):
-        return max(minimum, int(_DEFAULTS.get(name, minimum)))
+        return max(minimum, int(str(_DEFAULTS.get(name, minimum))))
