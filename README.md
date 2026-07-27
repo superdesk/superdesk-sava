@@ -131,6 +131,18 @@ cd /path/to/superdesk/client && npx link /path/to/superdesk-sava
 cd /path/to/superdesk/server && pip install -Ue ../../superdesk-sava
 ```
 
+### Tests
+
+The server suite covers the deterministic core — the tool registry and execution
+safety, the agent state machine (reply cleaning, history trimming, confirmation
+gating), settings resolution, and the pure lookup helpers. It needs no running
+Superdesk services (the LLM and resource calls are never hit).
+
+```bash
+pip install -r dev-requirements.txt   # pytest + pytest-asyncio
+pytest                                 # config lives in setup.cfg
+```
+
 ## Status
 
 🚧 Prototype, actively evolving. Working today:

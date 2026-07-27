@@ -1,5 +1,7 @@
-# Server-side developer tooling (formatting, linting, type checking).
+# Server-side developer tooling (formatting, linting, type checking, tests).
 # Matches the standards used across the other Superdesk repos.
 black==24.10.0
 flake8==7.1.1
 mypy==1.19.1
+pytest==9.1.0
+pytest-asyncio==1.3.0
