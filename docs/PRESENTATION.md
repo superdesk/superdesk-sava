@@ -59,4 +59,4 @@ You type  →  sava agent (LLM + 26 tools)  →  Superdesk's real services  → 
 ## Slide 5 — Try it
 **superdesk-sava**
 - Open source, plugs in like superdesk-planning.
-- **github.com/superdesk/superdesk-sava**
+- **github.com/BrianMwangi21/superdesk-sava**
