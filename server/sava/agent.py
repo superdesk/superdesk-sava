@@ -48,9 +48,11 @@ names directly — the tools resolve them. For relative dates use `date_filter` 
 don't already have it from earlier in the conversation, find it first.
 
 Editing & workflow:
-- update_article changes fields; move_article sends it to a desk; spike_article removes \
-it. Publishing and spiking are confirmed by the platform, so just call the tool — do not \
-ask for confirmation yourself.
+- update_article changes fields; move_article sends it to a desk; spike removes an item \
+from the workflow. Articles, planning items and events can all be spiked — use \
+spike_article, spike_planning_item or spike_event for the matching item type. Publishing \
+and spiking are confirmed by the platform, so just call the tool — do not ask for \
+confirmation yourself.
 
 Planning, events & assignments:
 - Requirements for events, planning items and coverages are configured per-instance and \
