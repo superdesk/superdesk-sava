@@ -16,9 +16,8 @@ import {sendCommand, ISavaAction, ISavaLink, ISavaPending, ISavaResult, SavaConv
 
 const EXAMPLES: Array<string> = [
     'Show me the articles I have authored',
-    "What's on the Sports desk right now?",
+    "What's on the Default Desk right now?",
     "Create a planning item for today about the AI conference and add a text coverage",
-    'What are my assignments?',
 ];
 
 interface IChatMessage {

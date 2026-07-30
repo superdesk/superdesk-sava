@@ -56,12 +56,7 @@ current-date context injected into the prompt.
 `add_coverage`.
 **Point out:** coverage types are pulled from the vocabulary, not guessed.
 
-### 6. Assignments
-**Type:** `What are my assignments?`
-*Fires:* `list_my_assignments`
-**Point out:** acts as the logged-in user — never more powerful than they are.
-
-### 7. Multi-turn memory
+### 6. Multi-turn memory
 **Type (follow-up, no ids):** `Spike the first one`
 *Fires:* resolves "the first one" from the earlier result in the same
 conversation → `spike_article`, which is also gated, so a second approval card
