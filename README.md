@@ -53,9 +53,9 @@ Current tools, by domain:
 - **articles (write)** — `create_article`, `update_article`, `move_article`,
   `spike_article` ⚠️, `publish_article` ⚠️
 - **planning** — `describe_planning_profile`, `create_planning_item`, `add_coverage`,
-  `search_planning`
+  `search_planning`, `spike_planning_item` ⚠️
 - **events** — `create_event`, `update_event`, `search_events`,
-  `link_event_to_planning`, `post_event` ⚠️
+  `link_event_to_planning`, `post_event` ⚠️, `spike_event` ⚠️
 - **assignments** — `list_my_assignments`
 
 ⚠️ = confirmation-gated (human-in-the-loop).
