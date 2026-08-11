@@ -53,9 +53,13 @@ Current tools, by domain:
 - **articles (write)** — `create_article`, `update_article`, `move_article`,
   `spike_article` ⚠️, `unspike_article`, `publish_article` ⚠️
 - **planning** — `describe_planning_profile`, `create_planning_item`, `add_coverage`,
-  `search_planning`, `spike_planning_item` ⚠️, `unspike_planning_item`
+  `search_planning`, `spike_planning_item` ⚠️, `unspike_planning_item`,
+  `cancel_planning_item` ⚠️, `postpone_planning_item`, `reschedule_planning_item`,
+  `unpost_planning_item` ⚠️
 - **events** — `create_event`, `update_event`, `search_events`,
-  `link_event_to_planning`, `post_event` ⚠️, `spike_event` ⚠️, `unspike_event`
+  `link_event_to_planning`, `post_event` ⚠️, `unpost_event` ⚠️, `spike_event` ⚠️,
+  `unspike_event`, `cancel_event` ⚠️, `postpone_event`, `reschedule_event`,
+  `update_event_time`
 - **assignments** — `list_my_assignments`
 
 ⚠️ = confirmation-gated (human-in-the-loop).

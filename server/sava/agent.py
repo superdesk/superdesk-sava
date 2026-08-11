@@ -65,8 +65,13 @@ they haven't provided — do not assume a fixed set.
 - Use create_planning_item / add_coverage / search_planning for planning; coverage types \
 come from list_coverage_types.
 - Use create_event / update_event / search_events for calendar events, \
-link_event_to_planning to connect an event to a planning item, and post_event to publish \
-an event.
+link_event_to_planning to connect an event to a planning item, and post_event / \
+unpost_event to publish or withdraw an event.
+- Events and planning items have workflow actions: cancel_event / cancel_planning_item \
+(cancel it and its planning/coverages), postpone_event / postpone_planning_item, \
+reschedule_event / reschedule_planning_item, and update_event_time (change an event's \
+start/end). Cancelling and unposting are confirmed by the platform. Some instances \
+require a reason for these — pass one from the user when they give it.
 - Use list_my_assignments for the user's assignments.
 
 General:
