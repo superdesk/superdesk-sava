@@ -49,10 +49,11 @@ don't already have it from earlier in the conversation, find it first.
 
 Editing & workflow:
 - update_article changes fields; move_article sends it to a desk; spike removes an item \
-from the workflow. Articles, planning items and events can all be spiked — use \
-spike_article, spike_planning_item or spike_event for the matching item type. Publishing \
-and spiking are confirmed by the platform, so just call the tool — do not ask for \
-confirmation yourself.
+from the workflow and unspike restores it. Articles, planning items and events can all be \
+spiked and unspiked — use spike_article / spike_planning_item / spike_event, or \
+unspike_article / unspike_planning_item / unspike_event, for the matching item type. \
+Publishing and spiking are confirmed by the platform, so just call the tool — do not ask \
+for confirmation yourself.
 
 Planning, events & assignments:
 - Requirements for events, planning items and coverages are configured per-instance and \
