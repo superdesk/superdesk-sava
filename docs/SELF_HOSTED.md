@@ -211,23 +211,31 @@ the *shape* of the trade-off, not the exact figures.
 - Each request used the **real SAVA payload** (system prompt + full tool schema +
   date context) — on the order of a few thousand input tokens per call.
 - **Method:** a fixed set of unambiguous single-shot prompts (retrieval/lookup
-  commands, one correct tool each), several warm runs each, measuring wall-clock
-  latency and whether the model called the expected tool.
+  commands, one correct tool each), **100 sequential calls per endpoint** cycling
+  the prompts, measuring wall-clock latency, whether the model called the expected
+  tool, and any errors (including rate-limiting).
 
-### Results (single-shot commands)
+### Results (single-shot commands, 100 calls each)
 
 | Metric | Small model, local CPU | Large model, cloud API |
 |---|---|---|
-| Warm latency (mean) | ~11 s per call | ~5 s per call (best ~2 s) |
-| Correctness (expected tool) | 6 / 6 | 6 / 6 |
+| Correctness (expected tool) | **100 %** (100/100) | **100 %** (100/100) |
+| Median latency | ~10.7 s | ~2.6 s |
+| p90 / p95 | ~12.1 s / ~12.5 s | ~4.8 s / ~5.4 s |
+| p99 / max | ~13.3 s / ~13.7 s | ~7.3 s / ~7.6 s |
+| Throughput (sequential) | ~5–6 req/min | ~20 req/min |
+| Rate-limiting | n/a | none observed |
 | Cold-start (first call after load) | ~2–2.5 min, one-time | none (provider keeps it warm) |
 | Per-token cost | none (fixed server cost) | billed on every call |
 
 ### What the numbers say
 
 - **For simple, single-step commands, a cheap CPU box is viable and accurate** —
-  here it was within roughly 2× of a large cloud model's average latency, with
-  identical tool-selection accuracy, at zero per-token cost.
+  here it matched the large cloud model's tool-selection accuracy exactly (100 % over
+  100 calls each), at zero per-token cost. It was ~4× slower on the median, but its
+  latency was **tight and predictable** (the entire run sat within ~9.5–13.7 s;
+  p99 ~13 s — no long tail), which for a single-user assistant matters as much as
+  raw speed.
 - **Cold start is a real, one-time tax** on the local box (loading weights +
   processing the prompt for the first time). Keep the model resident and send a
   warm-up request before a session; steady-state latency is what users feel.
