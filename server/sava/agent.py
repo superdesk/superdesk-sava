@@ -81,8 +81,15 @@ for, say so briefly instead of guessing.
 raw id (a link to open the item is shown to the user automatically)."""
 
 
-def _system_prompt() -> str:
-    """System prompt plus the current date/time so the agent can resolve relative dates."""
+def _date_context() -> str:
+    """Current date/time line, attached to the user's turn rather than the system prompt.
+
+    Deliberately kept out of the system+tools prefix: a per-request timestamp in that
+    prefix changes it on every call, which busts a self-hosted model server's prompt
+    cache and forces it to re-process every tool schema from scratch (very slow on CPU).
+    Putting the volatile bit at the end of the (trailing) user turn keeps the big prefix
+    stable and cacheable.
+    """
     from superdesk.utc import utcnow
 
     now = utcnow()
@@ -94,7 +101,7 @@ def _system_prompt() -> str:
     except Exception:  # noqa: BLE001
         pass
     return (
-        SYSTEM_PROMPT + f"\n\nContext: the current date/time is {now.isoformat()} (UTC); the instance "
+        f"Context: the current date/time is {now.isoformat()} (UTC); the instance "
         f"timezone is {tz}. Use these to compute relative dates like 'today' or 'Friday'."
     )
 
@@ -238,10 +245,10 @@ async def run_agent(
     model = get_setting("SAVA_MODEL")
     max_steps = get_int_setting("SAVA_MAX_STEPS")
 
-    messages: List[Dict[str, Any]] = [{"role": "system", "content": _system_prompt()}]
+    messages: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.extend(prior)
     if prompt:
-        messages.append({"role": "user", "content": prompt})
+        messages.append({"role": "user", "content": f"{_date_context()}\n\n{prompt}"})
 
     approved: Set[str] = set()
     denied: Set[str] = set()
