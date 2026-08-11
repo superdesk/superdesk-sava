@@ -6,6 +6,7 @@ async handler decorated with ``@tool(...)``. The package auto-imports it, so it
 shows up in the agent's toolset with no wiring.
 """
 
+import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional
@@ -132,6 +133,26 @@ def get_openai_tools() -> List[Dict[str, Any]]:
     ]
 
 
+def _coerce_json_args(args: Dict[str, Any], parameters: Dict[str, Any]) -> Dict[str, Any]:
+    """Repair args that a weaker model stringified.
+
+    Small/local models often emit an ``array``/``object`` parameter as a JSON
+    *string* (e.g. coverages='[{...}]') instead of the real structure. When the
+    tool's schema declares the parameter as array/object but the value arrived as
+    a string, parse it back so the handler receives what it expects.
+    """
+    props = (parameters or {}).get("properties") or {}
+    for key, value in list(args.items()):
+        if not isinstance(value, str):
+            continue
+        if (props.get(key) or {}).get("type") in ("array", "object"):
+            try:
+                args[key] = json.loads(value)
+            except (TypeError, ValueError):
+                pass  # leave it as-is; the handler still guards types
+    return args
+
+
 async def run_tool(name: str, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
     """Execute a registered tool, turning any exception into a failed result so
     one bad call never crashes the whole request."""
@@ -143,6 +164,7 @@ async def run_tool(name: str, args: Dict[str, Any], ctx: ToolContext) -> ToolRes
             for_model=f"Error: unknown tool '{name}'.",
         )
     try:
+        args = _coerce_json_args(args, t.parameters)
         return await t.handler(args, ctx)
     except Exception as exc:  # noqa: BLE001 - surface any tool failure to the model
         logger.exception("SAVA tool '%s' failed", name)
