@@ -193,3 +193,58 @@ abused. Options, roughly most to least secure:
 Swap the commented block back (Section 1) and restart the server. Because it's just
 configuration, you can keep both a cloud and a self-hosted profile side by side and
 switch per deployment — useful for comparing behaviour and cost.
+
+---
+
+## Appendix: example measurements
+
+**These numbers are from one specific setup on one day. They are illustrative,
+not guarantees — measure on your own hardware, model, and network.** The point is
+the *shape* of the trade-off, not the exact figures.
+
+### Test rig
+
+- **Local:** a modest CPU-only cloud box (4 vCPU, ~8 GB RAM, no GPU) running Ollama
+  with a small (~3B) tool-capable model at 4-bit quantization, 8k context, kept
+  resident.
+- **Cloud:** a large (~100B-class) model via OpenRouter.
+- Each request used the **real SAVA payload** (system prompt + full tool schema +
+  date context) — on the order of a few thousand input tokens per call.
+- **Method:** a fixed set of unambiguous single-shot prompts (retrieval/lookup
+  commands, one correct tool each), several warm runs each, measuring wall-clock
+  latency and whether the model called the expected tool.
+
+### Results (single-shot commands)
+
+| Metric | Small model, local CPU | Large model, cloud API |
+|---|---|---|
+| Warm latency (mean) | ~11 s per call | ~5 s per call (best ~2 s) |
+| Correctness (expected tool) | 6 / 6 | 6 / 6 |
+| Cold-start (first call after load) | ~2–2.5 min, one-time | none (provider keeps it warm) |
+| Per-token cost | none (fixed server cost) | billed on every call |
+
+### What the numbers say
+
+- **For simple, single-step commands, a cheap CPU box is viable and accurate** —
+  here it was within roughly 2× of a large cloud model's average latency, with
+  identical tool-selection accuracy, at zero per-token cost.
+- **Cold start is a real, one-time tax** on the local box (loading weights +
+  processing the prompt for the first time). Keep the model resident and send a
+  warm-up request before a session; steady-state latency is what users feel.
+- **Complex, multi-step flows are where capability shows.** On a prompt that
+  requires discovery + a nested action (look up the profile, then create an item
+  *with* a sub-object), the large cloud model followed the multi-step flow
+  correctly; the small local model tended to **shortcut the flow and drop nested
+  data**. Simple commands were reliable locally; complex flows were not.
+- **A larger model does not automatically fix this on the same box.** On the CPU
+  rig above, a step-up model (~4B) was correct but far too slow to use — a single
+  cold call ran into several minutes. Capability at usable speed needed a *GPU*,
+  not just a bigger model on the same CPU.
+
+### Takeaway
+
+Self-hosting removed per-token cost entirely and handled everyday commands well on
+cheap hardware. The lever for *more* — complex flows at good speed — is the
+**host**, not a clever trick: a small model on CPU for simple/moderate use, or a
+capable model on a GPU for the full experience. Both are fixed costs you control,
+and both avoid per-token billing — which is the entire reason to self-host.
