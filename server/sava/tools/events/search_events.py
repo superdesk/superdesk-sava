@@ -8,7 +8,7 @@ from ..lookups import (
     mongo_date_filter,
     mongo_find,
     parse_size,
-    planning_link,
+    event_card,
 )
 
 
@@ -56,5 +56,5 @@ async def search_events(args, ctx: ToolContext) -> ToolResult:
         summary=f"Found {len(items)} event(s)",
         for_model=f"Found {len(items)} event(s):\n" + "\n".join(lines),
         data={"count": len(items)},
-        links=[planning_link()],
+        items=[event_card(e) for e in items],
     )

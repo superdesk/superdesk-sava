@@ -6,6 +6,18 @@ export interface ISavaLink {
     route: string;
 }
 
+/** A Superdesk item a tool returned, rendered as a card. */
+export interface ISavaItemCard {
+    kind: 'article' | 'event' | 'planning' | 'assignment';
+    id: string;
+    title: string;
+    route: string;
+    subtitle?: string | null;
+    state?: string | null;
+    desk?: string | null;
+    date?: string | null;
+}
+
 /** One action the agent took (or tried to take) while handling a command. */
 export interface ISavaAction {
     tool: string;
@@ -13,6 +25,7 @@ export interface ISavaAction {
     ok: boolean;
     detail?: string;
     links?: Array<ISavaLink>;
+    items?: Array<ISavaItemCard>;
 }
 
 /** A confirmation-gated action awaiting the user's approval. */

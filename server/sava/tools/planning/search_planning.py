@@ -6,7 +6,7 @@ from ..lookups import (
     mongo_date_filter,
     mongo_find,
     parse_size,
-    planning_link,
+    planning_card,
 )
 
 
@@ -56,5 +56,5 @@ async def search_planning(args, ctx: ToolContext) -> ToolResult:
         summary=f"Found {len(items)} planning item(s)",
         for_model=f"Found {len(items)} planning item(s):\n" + "\n".join(lines),
         data={"count": len(items)},
-        links=[planning_link()],
+        items=[planning_card(i) for i in items],
     )

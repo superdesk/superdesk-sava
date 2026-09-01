@@ -3,6 +3,7 @@
 import logging
 
 from sava.tools.base import (
+    ItemCard,
     Tool,
     ToolContext,
     ToolLink,
@@ -81,14 +82,17 @@ async def test_run_tool_catches_handler_exception():
 
 
 def test_toolresult_action_dict():
-    res = ToolResult(ok=True, summary="s", for_model="m", detail="d", links=[ToolLink("L", "/r")])
+    card = ItemCard(kind="article", id="a1", title="T", route="/r1", state="published")
+    res = ToolResult(ok=True, summary="s", for_model="m", detail="d", links=[ToolLink("L", "/r")], items=[card])
     assert res.action_dict("mytool") == {
         "tool": "mytool",
         "ok": True,
         "summary": "s",
         "detail": "d",
         "links": [{"label": "L", "route": "/r"}],
+        "items": [card.to_dict()],
     }
+    assert card.to_dict()["desk"] is None
 
 
 def test_toolcontext_link_to_item():

@@ -1,5 +1,5 @@
-from ..base import ToolContext, ToolLink, ToolResult, tool
-from ..lookups import mongo_find, parse_size
+from ..base import ToolContext, ToolResult, tool
+from ..lookups import assignment_card, mongo_find, parse_size
 
 
 @tool(
@@ -47,5 +47,5 @@ async def list_my_assignments(args, ctx: ToolContext) -> ToolResult:
         summary=f"You have {len(items)} assignment(s)",
         for_model=f"Your assignments ({len(items)}):\n" + "\n".join(lines),
         data={"count": len(items)},
-        links=[ToolLink(label="Open assignments", route="/workspace/assignments")],
+        items=[assignment_card(a) for a in items],
     )

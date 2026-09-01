@@ -85,4 +85,4 @@ async def find_articles(args, ctx: ToolContext) -> ToolResult:
             must.append({"range": {date_field: rng}})
 
     items = await run_article_search(must=must, should=should, size=parse_size(args))
-    return format_article_results(items, ctx)
+    return await format_article_results(items, ctx)

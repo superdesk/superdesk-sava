@@ -44,4 +44,4 @@ async def find_my_articles(args, ctx: ToolContext) -> ToolResult:
         must.append({"terms": {"state": states}})
 
     items = await run_article_search(must=must, size=parse_size(args))
-    return format_article_results(items, ctx, label="article(s) by you")
+    return await format_article_results(items, ctx, label="article(s) by you")

@@ -33,4 +33,4 @@ async def find_desk_items(args, ctx: ToolContext) -> ToolResult:
         must.append({"terms": {"state": states}})
 
     items = await run_article_search(must=must, repo="archive", size=parse_size(args))
-    return format_article_results(items, ctx, label=f"item(s) on {desk.get('name')}")
+    return await format_article_results(items, ctx, label=f"item(s) on {desk.get('name')}")

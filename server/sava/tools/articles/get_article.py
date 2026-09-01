@@ -3,6 +3,7 @@ import re
 import superdesk
 
 from ..base import ToolContext, ToolResult, tool
+from ..lookups import article_card, desk_names
 
 _TAGS = re.compile(r"<[^>]+>")
 
@@ -39,5 +40,5 @@ async def get_article(args, ctx: ToolContext) -> ToolResult:
             f"slugline='{item.get('slugline')}':\n{snippet}"
         ),
         data={"article_id": article_id, "headline": headline},
-        links=[ctx.link_to_item(article_id)],
+        items=[article_card(item, await desk_names())],
     )

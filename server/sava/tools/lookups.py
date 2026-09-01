@@ -9,7 +9,7 @@ import superdesk
 from eve.utils import ParsedRequest
 from superdesk.core import json
 
-from .base import ToolContext, ToolLink, ToolResult
+from .base import ItemCard, ToolContext, ToolLink, ToolResult
 
 
 def valid_iso_datetime(value: Any) -> bool:
@@ -312,6 +312,79 @@ async def mongo_find(resource: str, lookup: Dict[str, Any], sort: str, size: int
     return items
 
 
+# --- item cards ------------------------------------------------------------
+
+
+def _iso_or_str(value: Any) -> Optional[str]:
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value if isinstance(value, str) and value else None
+
+
+async def desk_names() -> Dict[str, str]:
+    """Desk id -> name, for labelling cards."""
+    cursor = await superdesk.get_resource_service("desks").get_all_async()
+    return {str(d.get("_id")): d.get("name") or "" async for d in cursor}
+
+
+def article_card(item: Dict[str, Any], desks: Dict[str, str]) -> ItemCard:
+    item_id = str(item.get("_id") or item.get("guid") or item.get("item_id") or "")
+    headline = item.get("headline") or item.get("slugline") or "(untitled)"
+    slugline = item.get("slugline")
+    desk_id = (item.get("task") or {}).get("desk")
+    return ItemCard(
+        kind="article",
+        id=item_id,
+        title=headline,
+        route=f"/workspace/monitoring?item={item_id}&action=edit",
+        subtitle=slugline if slugline and slugline != headline else None,
+        state=item.get("state"),
+        desk=desks.get(str(desk_id)) if desk_id else None,
+        date=_iso_or_str(item.get("versioncreated")),
+    )
+
+
+def event_card(event: Dict[str, Any]) -> ItemCard:
+    locations = event.get("location") or []
+    place = (locations[0].get("name") if locations and isinstance(locations[0], dict) else None) or None
+    return ItemCard(
+        kind="event",
+        id=str(event.get("_id") or ""),
+        title=event.get("name") or event.get("slugline") or "(unnamed)",
+        route="/planning",
+        subtitle=place,
+        state=event.get("state"),
+        date=_iso_or_str((event.get("dates") or {}).get("start")),
+    )
+
+
+def planning_card(item: Dict[str, Any]) -> ItemCard:
+    count = len(item.get("coverages") or [])
+    return ItemCard(
+        kind="planning",
+        id=str(item.get("_id") or ""),
+        title=item.get("slugline") or item.get("headline") or "(untitled)",
+        route="/planning",
+        subtitle=f"{count} coverage(s)" if count else None,
+        state=item.get("state"),
+        date=_iso_or_str(item.get("planning_date")),
+    )
+
+
+def assignment_card(assignment: Dict[str, Any]) -> ItemCard:
+    planning = assignment.get("planning") or {}
+    assigned = assignment.get("assigned_to") or {}
+    return ItemCard(
+        kind="assignment",
+        id=str(assignment.get("_id") or ""),
+        title=planning.get("slugline") or "(coverage)",
+        route="/workspace/assignments",
+        subtitle=planning.get("g2_content_type"),
+        state=assigned.get("state"),
+        date=_iso_or_str(planning.get("scheduled")),
+    )
+
+
 # --- article search --------------------------------------------------------
 
 
@@ -349,27 +422,19 @@ async def run_article_search(
     return [doc async for doc in cursor]
 
 
-def format_article_results(
-    items: List[Dict[str, Any]], ctx: ToolContext, label: str = "article(s)", max_links: int = 6
+async def format_article_results(
+    items: List[Dict[str, Any]], ctx: ToolContext, label: str = "article(s)"
 ) -> ToolResult:
-    """Turn a list of found items into a ToolResult (summary lines + open links)."""
-    lines: List[str] = []
-    links: List[ToolLink] = []
-    for item in items:
-        headline = item.get("headline") or item.get("slugline") or "(untitled)"
-        state = item.get("state") or "?"
-        item_id = item.get("_id") or item.get("guid") or item.get("item_id")
-        lines.append(f"- {headline} — {state} (id={item_id})")
-        if len(links) < max_links and item_id:
-            links.append(ctx.link_to_item(str(item_id), label=headline[:48]))
-
+    """Turn found articles into a ToolResult: text lines for the model, cards for the UI."""
     if not items:
         return ToolResult(ok=True, summary=f"No {label} found", for_model=f"No matching {label}.", data={"count": 0})
 
+    cards = [article_card(item, await desk_names()) for item in items]
+    lines = [f"- {c.title} — {c.state or '?'}" + (f" [{c.desk}]" if c.desk else "") + f" (id={c.id})" for c in cards]
     return ToolResult(
         ok=True,
         summary=f"Found {len(items)} {label}",
         for_model=f"Found {len(items)} {label}:\n" + "\n".join(lines),
         data={"count": len(items)},
-        links=links,
+        items=cards,
     )

@@ -27,6 +27,33 @@ class ToolLink:
 
 
 @dataclass
+class ItemCard:
+    """A Superdesk item the UI renders as a card (headline, state, desk, open link)
+    instead of a text list. ``kind`` is article | event | planning | assignment."""
+
+    kind: str
+    id: str
+    title: str
+    route: str
+    subtitle: Optional[str] = None
+    state: Optional[str] = None
+    desk: Optional[str] = None
+    date: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "id": self.id,
+            "title": self.title,
+            "route": self.route,
+            "subtitle": self.subtitle,
+            "state": self.state,
+            "desk": self.desk,
+            "date": self.date,
+        }
+
+
+@dataclass
 class ToolContext:
     """Everything a tool needs to act as the current user and build responses."""
 
@@ -40,8 +67,8 @@ class ToolContext:
 class ToolResult:
     """Outcome of a tool call.
 
-    ``for_model`` is fed back to the LLM. ``summary``/``detail``/``links``/``data``
-    are surfaced to the client UI (the activity log + link buttons).
+    ``for_model`` is fed back to the LLM. ``summary``/``detail``/``links``/``items``
+    are surfaced to the client UI (the activity log, link buttons and item cards).
     """
 
     ok: bool
@@ -50,6 +77,7 @@ class ToolResult:
     detail: Optional[str] = None
     data: Optional[Dict[str, Any]] = None
     links: List[ToolLink] = field(default_factory=list)
+    items: List[ItemCard] = field(default_factory=list)
 
     def action_dict(self, tool_name: str) -> Dict[str, Any]:
         return {
@@ -58,6 +86,7 @@ class ToolResult:
             "summary": self.summary,
             "detail": self.detail,
             "links": [link.to_dict() for link in self.links],
+            "items": [item.to_dict() for item in self.items],
         }
 
 

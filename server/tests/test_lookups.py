@@ -10,12 +10,16 @@ from sava.tools.lookups import (
     DATE_FILTERS,
     DATE_FILTER_DESCRIPTION,
     MAX_RESULTS,
+    article_card,
+    assignment_card,
     contains,
+    event_card,
     date_window,
     elastic_date_filter,
     mongo_date_filter,
     merge_extra_fields,
     parse_size,
+    planning_card,
     protected_note,
     split_required_optional,
     strip_protected_fields,
@@ -171,3 +175,88 @@ def test_every_search_tool_uses_the_shared_date_filter_vocabulary():
         prop = get_tool(name).parameters["properties"]["date_filter"]
         assert set(prop["enum"]) <= set(DATE_FILTERS), name
         assert prop["description"] == DATE_FILTER_DESCRIPTION, name
+
+
+# --- item cards -------------------------------------------------------------------
+
+
+def test_article_card_fields_and_route():
+    when = datetime(2026, 9, 1, 10, 0, tzinfo=timezone.utc)
+    item = {
+        "_id": "a1",
+        "headline": "Big news",
+        "slugline": "big-news",
+        "state": "in_progress",
+        "task": {"desk": "d1"},
+        "versioncreated": when,
+    }
+    card = article_card(item, {"d1": "Sports"}).to_dict()
+    assert card == {
+        "kind": "article",
+        "id": "a1",
+        "title": "Big news",
+        "route": "/workspace/monitoring?item=a1&action=edit",
+        "subtitle": "big-news",
+        "state": "in_progress",
+        "desk": "Sports",
+        "date": "2026-09-01T10:00:00+00:00",
+    }
+    bare = article_card({"guid": "g1", "slugline": "only-slug"}, {})
+    assert (bare.id, bare.title, bare.subtitle, bare.desk, bare.date) == ("g1", "only-slug", None, None, None)
+
+
+def test_event_planning_and_assignment_cards():
+    event = event_card(
+        {
+            "_id": "e1",
+            "name": "Launch",
+            "state": "scheduled",
+            "location": [{"name": "Prague"}],
+            "dates": {"start": "2026-09-02T09:00:00+00:00"},
+        }
+    )
+    assert (event.kind, event.title, event.subtitle, event.date, event.route) == (
+        "event",
+        "Launch",
+        "Prague",
+        "2026-09-02T09:00:00+00:00",
+        "/planning",
+    )
+
+    planning = planning_card({"_id": "p1", "slugline": "budget", "coverages": [{}, {}], "planning_date": "2026-09-02"})
+    assert (planning.kind, planning.title, planning.subtitle) == ("planning", "budget", "2 coverage(s)")
+    assert planning_card({"_id": "p2", "headline": "no coverages"}).subtitle is None
+
+    assignment = assignment_card(
+        {
+            "_id": "as1",
+            "planning": {"slugline": "photos", "g2_content_type": "picture", "scheduled": "2026-09-03"},
+            "assigned_to": {"state": "assigned"},
+        }
+    )
+    assert (assignment.kind, assignment.title, assignment.subtitle, assignment.state, assignment.route) == (
+        "assignment",
+        "photos",
+        "picture",
+        "assigned",
+        "/workspace/assignments",
+    )
+
+
+async def test_format_article_results_returns_cards_for_ui_and_lines_for_model(monkeypatch):
+    async def fake_desks():
+        return {"d1": "Sports"}
+
+    monkeypatch.setattr(lookups, "desk_names", fake_desks)
+    items = [
+        {"_id": "a1", "headline": "One", "state": "published", "task": {"desk": "d1"}},
+        {"_id": "a2", "headline": "Two", "state": "spiked"},
+    ]
+    res = await lookups.format_article_results(items, None)
+    assert res.ok and res.summary == "Found 2 article(s)"
+    assert [c.title for c in res.items] == ["One", "Two"]
+    assert res.links == []
+    assert "- One — published [Sports] (id=a1)" in res.for_model
+    assert "- Two — spiked (id=a2)" in res.for_model
+    empty = await lookups.format_article_results([], None)
+    assert empty.items == [] and "No matching" in empty.for_model
