@@ -43,9 +43,9 @@ def _title_client(content):
 
 
 async def test_generate_title_cleans_model_output(monkeypatch):
-    monkeypatch.setattr(conversations, "_build_client", lambda: _title_client('"Budget review planning."\n'))
+    monkeypatch.setattr(conversations, "_build_client", lambda: _title_client("finalBudget review planning.\n"))
     assert await generate_title("plan the budget review", "Created it.") == "Budget review planning"
-    assert _title_client.kwargs["max_tokens"] == 24
+    assert _title_client.kwargs["max_tokens"] == conversations.TITLE_MAX_TOKENS >= 200
     assert "tools" not in _title_client.kwargs
 
 

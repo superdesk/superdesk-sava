@@ -23,14 +23,17 @@ from superdesk.core.resources import (
     fields,
 )
 
-from .agent import _build_client
+from .agent import _build_client, _clean_reply
 from .default_settings import get_setting
 
 logger = logging.getLogger(__name__)
 
 RESOURCE = "sava_conversations"
 TITLE_MAX = 60
-TITLE_TIMEOUT_SECONDS = 8
+TITLE_TIMEOUT_SECONDS = 15
+# Reasoning models (e.g. gpt-oss) spend output tokens on hidden reasoning before
+# any content; a tight cap returns finish_reason=length with no title at all.
+TITLE_MAX_TOKENS = 200
 LIST_LIMIT = 200
 
 TITLE_PROMPT = (
@@ -105,11 +108,11 @@ async def generate_title(prompt: str, reply: str) -> Optional[str]:
                     {"role": "user", "content": f"User: {prompt[:1000]}\n\nAssistant: {(reply or '')[:1000]}"},
                 ],
                 temperature=0,
-                max_tokens=24,
+                max_tokens=TITLE_MAX_TOKENS,
             ),
             TITLE_TIMEOUT_SECONDS,
         )
-        title = _clean_title(response.choices[0].message.content or "")
+        title = _clean_title(_clean_reply(response.choices[0].message.content or ""))
     except Exception:  # noqa: BLE001 - best effort only
         logger.warning("SAVA: title generation failed", exc_info=True)
         return None
