@@ -1,7 +1,7 @@
 from typing import Any, Dict, List
 
 from ..base import ToolContext, ToolResult, tool
-from ..lookups import find_desk, format_article_results, run_article_search
+from ..lookups import find_desk, format_article_results, parse_size, run_article_search
 
 
 @tool(
@@ -32,10 +32,5 @@ async def find_desk_items(args, ctx: ToolContext) -> ToolResult:
     if isinstance(states, list) and states:
         must.append({"terms": {"state": states}})
 
-    try:
-        size = int(args.get("size") or 25)
-    except (TypeError, ValueError):
-        size = 25
-
-    items = await run_article_search(must=must, repo="archive", size=size)
+    items = await run_article_search(must=must, repo="archive", size=parse_size(args))
     return format_article_results(items, ctx, label=f"item(s) on {desk.get('name')}")

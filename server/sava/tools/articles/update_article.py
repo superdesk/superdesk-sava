@@ -1,6 +1,7 @@
 import superdesk
 
 from ..base import ToolContext, ToolResult, tool
+from ..lookups import protected_note, strip_protected_fields
 
 
 @tool(
@@ -31,14 +32,20 @@ async def update_article(args, ctx: ToolContext) -> ToolResult:
     if not isinstance(fields, dict) or not fields:
         return ToolResult(ok=False, summary="No fields", for_model="Provide a `fields` object of changes.")
 
-    updates = {k: v for k, v in fields.items() if v is not None}
+    updates, dropped = strip_protected_fields(fields)
+    if not updates:
+        return ToolResult(
+            ok=False,
+            summary="No editable fields",
+            for_model="None of the given fields can be edited directly." + protected_note(dropped),
+        )
     await superdesk.get_resource_service("archive").patch_async(article_id, updates)
 
     changed = ", ".join(updates.keys())
     return ToolResult(
         ok=True,
         summary=f"Updated {changed}",
-        for_model=f"Updated article id={article_id}; changed fields: {changed}.",
+        for_model=f"Updated article id={article_id}; changed fields: {changed}." + protected_note(dropped),
         data={"article_id": article_id},
         links=[ctx.link_to_item(article_id)],
     )

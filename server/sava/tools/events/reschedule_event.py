@@ -1,5 +1,5 @@
 from ..base import ToolContext, ToolLink, ToolResult, tool
-from ._actions import lock_event, parse_dt
+from ._actions import parse_dt, run_event_action
 
 
 @tool(
@@ -32,16 +32,13 @@ async def reschedule_event(args, ctx: ToolContext) -> ToolResult:
 
     from planning.events.events_reschedule import process_reschedule_event
 
-    original = await lock_event(event_id, "reschedule")
-    if original is None:
-        return ToolResult(ok=False, summary="Event not found", for_model=f"No event with id {event_id}.")
-
     updates: dict = {"dates": {"start": parse_dt(start), "end": parse_dt(end)}}
     reason = (args.get("reason") or "").strip()
     if reason:
         updates["reason"] = reason
 
-    await process_reschedule_event(updates, original)
+    if await run_event_action(event_id, "reschedule", process_reschedule_event, updates) is None:
+        return ToolResult(ok=False, summary="Event not found", for_model=f"No event with id {event_id}.")
     return ToolResult(
         ok=True,
         summary="Rescheduled event",

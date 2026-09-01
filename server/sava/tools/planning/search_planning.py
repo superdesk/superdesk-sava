@@ -4,6 +4,7 @@ import superdesk
 from superdesk.utc import utcnow
 
 from ..base import ToolContext, ToolLink, ToolResult, tool
+from ..lookups import contains, parse_size
 
 
 @tool(
@@ -24,7 +25,7 @@ async def search_planning(args, ctx: ToolContext) -> ToolResult:
 
     text = (args.get("query") or "").strip()
     if text:
-        conditions.append({"slugline": {"$regex": text, "$options": "i"}})
+        conditions.append({"slugline": contains(text)})
 
     date_filter = (args.get("date_filter") or "").strip().lower()
     if date_filter:
@@ -39,10 +40,7 @@ async def search_planning(args, ctx: ToolContext) -> ToolResult:
 
     lookup = {"$and": conditions} if len(conditions) > 1 else conditions[0]
 
-    try:
-        size = int(args.get("size") or 25)
-    except (TypeError, ValueError):
-        size = 25
+    size = parse_size(args)
 
     cursor = await superdesk.get_resource_service("planning").get_from_mongo_async(req=None, lookup=lookup)
     items = []

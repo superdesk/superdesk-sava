@@ -1,5 +1,5 @@
 from ..base import ToolContext, ToolLink, ToolResult, tool
-from ._actions import lock_event, parse_dt
+from ._actions import parse_dt, run_event_action
 
 
 @tool(
@@ -28,13 +28,10 @@ async def update_event_time(args, ctx: ToolContext) -> ToolResult:
 
     from planning.events.events_update_time import process_update_time
 
-    original = await lock_event(event_id, "update_time")
-    if original is None:
-        return ToolResult(ok=False, summary="Event not found", for_model=f"No event with id {event_id}.")
-
     updates: dict = {"dates": {"start": parse_dt(start), "end": parse_dt(end)}}
 
-    await process_update_time(updates, original)
+    if await run_event_action(event_id, "update_time", process_update_time, updates) is None:
+        return ToolResult(ok=False, summary="Event not found", for_model=f"No event with id {event_id}.")
     return ToolResult(
         ok=True,
         summary="Updated event time",

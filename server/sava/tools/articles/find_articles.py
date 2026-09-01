@@ -3,7 +3,7 @@ from datetime import timedelta
 from superdesk.utc import utcnow
 
 from ..base import ToolContext, ToolResult, tool
-from ..lookups import find_desk, find_user_by_name, format_article_results, run_article_search
+from ..lookups import find_desk, find_user_by_name, format_article_results, parse_size, run_article_search
 
 
 def _date_range(date_filter: str):
@@ -53,7 +53,9 @@ async def find_articles(args, ctx: ToolContext) -> ToolResult:
 
     query = (args.get("query") or "").strip()
     if query:
-        must.append({"query_string": {"query": query}})
+        # simple_query_string never raises on user syntax (unbalanced quotes/parens),
+        # unlike query_string, so a free-text query can't fail the search.
+        must.append({"simple_query_string": {"query": query, "default_operator": "and", "lenient": True}})
 
     desk_name = (args.get("desk") or "").strip()
     if desk_name:
@@ -86,10 +88,5 @@ async def find_articles(args, ctx: ToolContext) -> ToolResult:
         if rng:
             must.append({"range": {date_field: rng}})
 
-    try:
-        size = int(args.get("size") or 25)
-    except (TypeError, ValueError):
-        size = 25
-
-    items = await run_article_search(must=must, should=should, size=size)
+    items = await run_article_search(must=must, should=should, size=parse_size(args))
     return format_article_results(items, ctx)

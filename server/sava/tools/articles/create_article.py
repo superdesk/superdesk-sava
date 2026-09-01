@@ -7,7 +7,7 @@ from superdesk.resource_fields import VERSION
 from superdesk.utc import utcnow
 
 from ..base import ToolContext, ToolResult, tool
-from ..lookups import get_content_profile, resolve_desk_stage
+from ..lookups import get_content_profile, protected_note, resolve_desk_stage, strip_protected_fields
 
 
 @tool(
@@ -62,9 +62,8 @@ async def create_article(args, ctx: ToolContext) -> ToolResult:
         VERSION: 1,
         "versioncreated": utcnow(),
     }
-    for key, value in fields.items():
-        if value is not None:
-            item[key] = value
+    values, dropped = strip_protected_fields(fields)
+    item.update(values)
     if profile_doc is not None:
         item["profile"] = profile_doc.get("_id")
     if desk is not None:
@@ -82,7 +81,7 @@ async def create_article(args, ctx: ToolContext) -> ToolResult:
         detail=f"id {article_id}",
         for_model=(
             f"Created article id={article_id} headline='{title}' "
-            f"profile='{item.get('profile')}' on desk '{desk_name}', state=submitted."
+            f"profile='{item.get('profile')}' on desk '{desk_name}', state=submitted." + protected_note(dropped)
         ),
         data={"article_id": article_id, "headline": title},
         links=[ctx.link_to_item(article_id)],

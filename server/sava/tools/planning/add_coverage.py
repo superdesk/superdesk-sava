@@ -3,6 +3,7 @@ from typing import Any, Dict
 import superdesk
 
 from ..base import ToolContext, ToolLink, ToolResult, tool
+from ..lookups import merge_extra_fields, protected_note
 
 
 @tool(
@@ -51,11 +52,7 @@ async def add_coverage(args, ctx: ToolContext) -> ToolResult:
     if args.get("scheduled"):
         planning["scheduled"] = args["scheduled"]
 
-    extra = args.get("fields")
-    if isinstance(extra, dict):
-        for key, value in extra.items():
-            if value is not None and key not in planning:
-                planning[key] = value
+    dropped = merge_extra_fields(planning, args.get("fields"))
 
     coverages.append({"planning": planning})
 
@@ -65,7 +62,7 @@ async def add_coverage(args, ctx: ToolContext) -> ToolResult:
         summary=f"Added {coverage_type} coverage",
         for_model=(
             f"Added a {coverage_type} coverage to planning item id={planning_id} "
-            f"(now {len(coverages)} coverage(s))."
+            f"(now {len(coverages)} coverage(s))." + protected_note(dropped)
         ),
         data={"planning_id": planning_id, "coverages": len(coverages)},
         links=[ToolLink(label="Open planning", route="/planning")],

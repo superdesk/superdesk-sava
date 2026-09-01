@@ -3,7 +3,7 @@ from typing import Any, Dict
 import superdesk
 
 from ..base import ToolContext, ToolLink, ToolResult, tool
-from ..lookups import valid_iso_datetime
+from ..lookups import merge_extra_fields, protected_note, valid_iso_datetime
 
 
 def _default_timezone() -> str:
@@ -80,11 +80,7 @@ async def create_event(args, ctx: ToolContext) -> ToolResult:
         item["location"] = [{"name": args["location"]}]
 
     # Any instance-specific fields the model gathered from describe_planning_profile.
-    extra = args.get("fields")
-    if isinstance(extra, dict):
-        for key, value in extra.items():
-            if value is not None and key not in item:
-                item[key] = value
+    dropped = merge_extra_fields(item, args.get("fields"))
 
     await superdesk.get_resource_service("events").post_async([item])
     event_id = str(item["_id"])
@@ -92,7 +88,7 @@ async def create_event(args, ctx: ToolContext) -> ToolResult:
         ok=True,
         summary=f"Created event “{name}”",
         detail=f"id {event_id}",
-        for_model=f"Created event id={event_id} name='{name}' start={start} tz={tz}.",
+        for_model=f"Created event id={event_id} name='{name}' start={start} tz={tz}." + protected_note(dropped),
         data={"event_id": event_id, "name": name},
         links=[ToolLink(label="Open planning", route="/planning")],
     )

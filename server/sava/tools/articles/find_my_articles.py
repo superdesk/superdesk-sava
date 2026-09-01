@@ -1,5 +1,5 @@
 from ..base import ToolContext, ToolResult, tool
-from ..lookups import format_article_results, run_article_search
+from ..lookups import format_article_results, parse_size, run_article_search
 
 
 @tool(
@@ -43,10 +43,5 @@ async def find_my_articles(args, ctx: ToolContext) -> ToolResult:
     if isinstance(states, list) and states:
         must.append({"terms": {"state": states}})
 
-    try:
-        size = int(args.get("size") or 25)
-    except (TypeError, ValueError):
-        size = 25
-
-    items = await run_article_search(must=must, size=size)
+    items = await run_article_search(must=must, size=parse_size(args))
     return format_article_results(items, ctx, label="article(s) by you")

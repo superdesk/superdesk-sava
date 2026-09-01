@@ -4,6 +4,7 @@ import superdesk
 from superdesk.utc import utcnow
 
 from ..base import ToolContext, ToolLink, ToolResult, tool
+from ..lookups import merge_extra_fields, protected_note
 
 
 def _build_coverage(spec: Dict[str, Any]) -> Dict[str, Any]:
@@ -69,11 +70,7 @@ async def create_planning_item(args, ctx: ToolContext) -> ToolResult:
         item["coverages"] = [_build_coverage(c) for c in coverages if isinstance(c, dict)]
 
     # Any instance-specific fields the model gathered from describe_planning_profile.
-    extra = args.get("fields")
-    if isinstance(extra, dict):
-        for key, value in extra.items():
-            if value is not None and key not in item:
-                item[key] = value
+    dropped = merge_extra_fields(item, args.get("fields"))
 
     await superdesk.get_resource_service("planning").post_async([item])
     planning_id = str(item["_id"])
@@ -83,7 +80,7 @@ async def create_planning_item(args, ctx: ToolContext) -> ToolResult:
         summary=f"Created planning item “{slugline}”" + (f" with {cov_count} coverage(s)" if cov_count else ""),
         for_model=(
             f"Created planning item id={planning_id} slugline='{slugline}' "
-            f"planning_date={item['planning_date']} coverages={cov_count}."
+            f"planning_date={item['planning_date']} coverages={cov_count}." + protected_note(dropped)
         ),
         data={"planning_id": planning_id, "coverages": cov_count},
         links=[ToolLink(label="Open planning", route="/planning")],

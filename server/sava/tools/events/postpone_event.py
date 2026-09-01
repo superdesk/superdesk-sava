@@ -1,5 +1,5 @@
 from ..base import ToolContext, ToolLink, ToolResult, tool
-from ._actions import lock_event
+from ._actions import run_event_action
 
 
 @tool(
@@ -23,16 +23,13 @@ async def postpone_event(args, ctx: ToolContext) -> ToolResult:
 
     from planning.events.events_postpone import process_postpone_event
 
-    original = await lock_event(event_id, "postpone")
-    if original is None:
-        return ToolResult(ok=False, summary="Event not found", for_model=f"No event with id {event_id}.")
-
     updates: dict = {}
     reason = (args.get("reason") or "").strip()
     if reason:
         updates["reason"] = reason
 
-    await process_postpone_event(updates, original)
+    if await run_event_action(event_id, "postpone", process_postpone_event, updates) is None:
+        return ToolResult(ok=False, summary="Event not found", for_model=f"No event with id {event_id}.")
     return ToolResult(
         ok=True,
         summary="Postponed event",

@@ -1,6 +1,7 @@
 import superdesk
 
 from ..base import ToolContext, ToolLink, ToolResult, tool
+from ..lookups import parse_size
 
 
 @tool(
@@ -26,10 +27,7 @@ async def list_my_assignments(args, ctx: ToolContext) -> ToolResult:
     if args.get("state"):
         lookup["assigned_to.state"] = args["state"]
 
-    try:
-        size = int(args.get("size") or 25)
-    except (TypeError, ValueError):
-        size = 25
+    size = parse_size(args)
 
     cursor = await superdesk.get_resource_service("assignments").get_from_mongo_async(req=None, lookup=lookup)
     items = []

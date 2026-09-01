@@ -1,5 +1,6 @@
 """Shared, non-tool helpers used by multiple SAVA tools."""
 
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -29,6 +30,90 @@ def valid_iso_datetime(value: Any) -> bool:
     except ValueError:
         return False
     return True
+
+
+# --- model-input guards ------------------------------------------------------
+
+MAX_RESULTS = 100
+
+# Fields the model must never set directly: identity, versioning, workflow state,
+# locking and ownership are owned by Superdesk. Anything starting with "_" is
+# treated the same way.
+PROTECTED_FIELDS = frozenset(
+    {
+        "guid",
+        "type",
+        "state",
+        "pubstatus",
+        "task",
+        "lock_user",
+        "lock_session",
+        "lock_time",
+        "lock_action",
+        "original_creator",
+        "version_creator",
+        "firstcreated",
+        "versioncreated",
+        "firstpublished",
+        "expiry",
+        "expired",
+        "unique_id",
+        "unique_name",
+        "family_id",
+        "original_id",
+        "item_id",
+        "ingest_id",
+        "ingest_provider",
+        "recurrence_id",
+    }
+)
+
+
+def parse_size(args: Dict[str, Any], default: int = 25, maximum: int = MAX_RESULTS) -> int:
+    """Result-count argument from the model, defaulted and clamped to [1, maximum]."""
+    try:
+        size = int(args.get("size") or default)
+    except (TypeError, ValueError):
+        size = default
+    return max(1, min(size, maximum))
+
+
+def contains(text: str) -> Dict[str, str]:
+    """Mongo case-insensitive substring match, with the (model-supplied) text
+    escaped so regex metacharacters can't break or slow the query."""
+    return {"$regex": re.escape(text), "$options": "i"}
+
+
+def strip_protected_fields(fields: Any) -> Tuple[Dict[str, Any], List[str]]:
+    """Split model-supplied field values into (allowed, dropped-protected-names).
+    ``None`` values are dropped silently."""
+    clean: Dict[str, Any] = {}
+    dropped: List[str] = []
+    if not isinstance(fields, dict):
+        return clean, dropped
+    for key, value in fields.items():
+        if value is None:
+            continue
+        if not isinstance(key, str) or key.startswith("_") or key in PROTECTED_FIELDS:
+            dropped.append(str(key))
+        else:
+            clean[key] = value
+    return clean, dropped
+
+
+def merge_extra_fields(item: Dict[str, Any], extra: Any) -> List[str]:
+    """Merge a tool's free-form ``fields`` object into ``item`` without overriding
+    keys the tool already set. Returns the protected field names it refused."""
+    clean, dropped = strip_protected_fields(extra)
+    for key, value in clean.items():
+        if key not in item:
+            item[key] = value
+    return dropped
+
+
+def protected_note(dropped: List[str]) -> str:
+    """Suffix for ``for_model`` so the model learns which fields were refused."""
+    return f" Ignored protected field(s): {', '.join(dropped)}." if dropped else ""
 
 
 # --- desks / stages / users / profiles -------------------------------------
@@ -77,14 +162,8 @@ async def resolve_desk_stage(
 async def find_user_by_name(name: str) -> Optional[Dict[str, Any]]:
     """Resolve a user by display name / username / first / last (case-insensitive)."""
     service = superdesk.get_resource_service("users")
-    lookup = {
-        "$or": [
-            {"display_name": {"$regex": name, "$options": "i"}},
-            {"username": {"$regex": name, "$options": "i"}},
-            {"first_name": {"$regex": name, "$options": "i"}},
-            {"last_name": {"$regex": name, "$options": "i"}},
-        ]
-    }
+    match = contains(name)
+    lookup = {"$or": [{f: match} for f in ("display_name", "username", "first_name", "last_name")]}
     cursor = await service.get_from_mongo_async(req=None, lookup=lookup)
     async for candidate in cursor:
         return candidate
