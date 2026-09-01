@@ -75,6 +75,15 @@ vs superdesk-cp vs superdesk-stt) and can change on the fly, so create tools als
 accept a generic `fields` object to carry any instance-specific field with no code
 change.
 
+### Chat history
+
+Conversations are stored server-side in the `sava_conversations` Mongo resource,
+scoped to the logged-in user, and listed in a sidebar (grouped by day) with
+rename and delete. The first turn creates a conversation titled from the prompt,
+then a small model call replaces that with a short title (best effort). Because
+this is a new resource, run the usual `python manage.py app:initialize_data` once
+after installing so its Mongo index is created.
+
 ### Human-in-the-loop
 
 Tools flagged `requires_confirmation=True` (e.g. publish) don't run immediately:
