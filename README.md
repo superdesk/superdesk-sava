@@ -117,7 +117,9 @@ origin.
 
 Prototyping uses **OpenRouter** (OpenAI-API-compatible), so we use the official
 `openai` Python SDK pointed at OpenRouter's base URL. Defaults live in
-`server/sava/default_settings.py` and can be overridden via environment variables:
+`server/sava/default_settings.py` and can be overridden via environment variables
+or in the Superdesk `settings.py` (environment wins, then `settings.py`, then the
+defaults):
 
 | Env var | Default | Meaning |
 |---|---|---|
@@ -127,7 +129,12 @@ Prototyping uses **OpenRouter** (OpenAI-API-compatible), so we use the official
 | `SAVA_MAX_STEPS` | `6` | max agent loop iterations per turn |
 | `SAVA_MAX_HISTORY_MESSAGES` | `20` | conversation-memory cap |
 
-A client that wants a different model just sets `SAVA_MODEL`.
+A client that wants a different model just sets `SAVA_MODEL`. To point SAVA at a
+model you host yourself, see [docs/SELF_HOSTED.md](docs/SELF_HOSTED.md).
+
+Every turn writes one `SAVA turn:` log line at INFO with the model, outcome,
+number of model calls, tools run, prompt/completion token counts, wall time and
+user id — the raw data for any cost or latency discussion.
 
 ## Development
 
@@ -165,6 +172,10 @@ pytest                                 # config lives in setup.cfg
 
 - **Lint & types** — `black --check`, `flake8`, `mypy`. No Superdesk install, so
   it's fast and always reliable.
+- **Client lint** — `eslint` over the extension with the shared
+  `superdesk-code-style` rules. The TypeScript type-check needs the host's
+  `superdesk-api` typings, so it runs as part of the Superdesk client build rather
+  than here.
 - **Tests** — installs `superdesk-core` and `superdesk-planning` from their
   moving `develop` branches, then runs `pytest`. This is deliberate: the job
   doubles as an integration canary, so if an upstream change breaks SAVA the

@@ -1,5 +1,7 @@
 """Agent loop internals: reply cleaning, history handling, confirmation gating."""
 
+import logging
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -256,3 +258,61 @@ async def test_new_prompt_while_pending_cancels_and_stays_well_formed(monkeypatc
     assert result["actions"][0]["tool"] == "sava_test_gated"
     assert result["actions"][0]["ok"] is False
     assert _well_formed(result["conversation"])
+
+
+# --- observability ------------------------------------------------------------
+
+
+def _fake_text_client(text, usage):
+    class _Completions:
+        async def create(self, **kwargs):
+            msg = SimpleNamespace(content=text, tool_calls=None)
+            return SimpleNamespace(choices=[SimpleNamespace(message=msg)], usage=usage)
+
+    return SimpleNamespace(chat=SimpleNamespace(completions=_Completions()))
+
+
+async def test_turn_logs_model_usage_and_outcome(monkeypatch, caplog):
+    monkeypatch.setenv("SAVA_OPENROUTER_API_KEY", "test")
+    usage = SimpleNamespace(prompt_tokens=4321, completion_tokens=12)
+    monkeypatch.setattr(agent, "_build_client", lambda: _fake_text_client("All done.", usage))
+
+    with caplog.at_level(logging.INFO, logger="sava.agent"):
+        result = await run_agent("hello", user={"_id": "u1"})
+
+    assert result["reply"] == "All done."
+    line = next(r.getMessage() for r in caplog.records if r.getMessage().startswith("SAVA turn:"))
+    assert "outcome=ok" in line
+    assert "steps=1" in line
+    assert "prompt_tokens=4321" in line
+    assert "completion_tokens=12" in line
+    assert "user=u1" in line
+
+
+def test_build_client_is_cached_per_endpoint(monkeypatch):
+    monkeypatch.setenv("SAVA_OPENROUTER_API_KEY", "k1")
+    monkeypatch.setenv("SAVA_OPENROUTER_BASE_URL", "https://example.test/v1")
+    agent._CLIENT.clear()
+    first = agent._build_client()
+    assert agent._build_client() is first
+    monkeypatch.setenv("SAVA_MODEL", "other")  # unrelated setting: same client
+    assert agent._build_client() is first
+    monkeypatch.setenv("SAVA_OPENROUTER_BASE_URL", "http://localhost:11434/v1")
+    assert agent._build_client() is not first
+    agent._CLIENT.clear()
+
+
+# --- prompt / registry drift --------------------------------------------------
+
+# snake_case words in the prompt that are parameter values, not tool names.
+_PROMPT_NON_TOOLS = {"date_filter", "this_week", "this_month"}
+
+
+def test_system_prompt_names_only_registered_tools():
+    """Every snake_case identifier the prompt tells the model to call must exist,
+    so renaming or removing a tool can't silently leave the prompt pointing at
+    nothing."""
+    from sava.tools.base import _REGISTRY
+
+    mentioned = set(re.findall(r"\b[a-z]+(?:_[a-z]+)+\b", agent.SYSTEM_PROMPT)) - _PROMPT_NON_TOOLS
+    assert mentioned <= set(_REGISTRY), sorted(mentioned - set(_REGISTRY))

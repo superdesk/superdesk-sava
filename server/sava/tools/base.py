@@ -82,6 +82,7 @@ class Tool:
 
 
 _REGISTRY: Dict[str, Tool] = {}
+_SCHEMA_CACHE: Optional[List[Dict[str, Any]]] = None
 
 
 def tool(
@@ -98,6 +99,8 @@ def tool(
     """Register an async handler as a SAVA tool."""
 
     def decorator(fn: ToolHandler) -> ToolHandler:
+        global _SCHEMA_CACHE
+        _SCHEMA_CACHE = None
         if name in _REGISTRY:
             logger.warning(
                 "SAVA: tool name '%s' is already registered; %s is overriding it.",
@@ -125,18 +128,23 @@ def get_tool(name: str) -> Optional[Tool]:
 
 
 def get_openai_tools() -> List[Dict[str, Any]]:
-    """The tool schemas advertised to the model, OpenAI function-calling format."""
-    return [
-        {
-            "type": "function",
-            "function": {
-                "name": t.name,
-                "description": t.description,
-                "parameters": t.parameters,
-            },
-        }
-        for t in _REGISTRY.values()
-    ]
+    """The tool schemas advertised to the model, OpenAI function-calling format.
+    Built once per registry state (the registry is static after autoload) since
+    it is sent on every model call."""
+    global _SCHEMA_CACHE
+    if _SCHEMA_CACHE is None:
+        _SCHEMA_CACHE = [
+            {
+                "type": "function",
+                "function": {
+                    "name": t.name,
+                    "description": t.description,
+                    "parameters": t.parameters,
+                },
+            }
+            for t in _REGISTRY.values()
+        ]
+    return _SCHEMA_CACHE
 
 
 def _coerce_json_args(args: Dict[str, Any], parameters: Dict[str, Any]) -> Dict[str, Any]:

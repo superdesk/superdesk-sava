@@ -1,6 +1,4 @@
 import * as React from 'react';
-import {marked} from 'marked';
-import DOMPurify from 'dompurify';
 import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
 import './sava.css';
 import {
@@ -12,70 +10,16 @@ import {
 } from '@chatscope/chat-ui-kit-react';
 
 import {superdeskApi} from './superdeskApi';
-import {sendCommand, ISavaAction, ISavaLink, ISavaPending, ISavaResult, SavaConversation} from './api';
+import {sendCommand, ISavaPending, ISavaResult, SavaConversation} from './api';
+import {IChatMessage, MessageRow} from './MessageRow';
+import {PendingCard} from './PendingCard';
+import {TypingRow} from './TypingRow';
 
 const EXAMPLES: Array<string> = [
     'Show me the articles I have authored',
-    "What's on the Default Desk right now?",
-    "Create a planning item for today about the AI conference and add a text coverage",
+    'What\'s on the Default Desk right now?',
+    'Create a planning item for today about the AI conference and add a text coverage',
 ];
-
-interface IChatMessage {
-    id: number;
-    role: 'user' | 'assistant';
-    text: string;
-    actions?: Array<ISavaAction>;
-    error?: boolean;
-}
-
-/** Render an assistant reply as sanitized markdown (bold, lists, links, code). */
-function Markdown({text}: {text: string}) {
-    const html = React.useMemo(() => {
-        const raw = marked.parse(text || '', {async: false}) as string;
-        return DOMPurify.sanitize(raw);
-    }, [text]);
-    return <div className="sava-md" dangerouslySetInnerHTML={{__html: html}} />;
-}
-
-/** Client-navigable links: prepend the app's own hash router (host-agnostic). */
-function LinkButtons({links}: {links?: Array<ISavaLink>}) {
-    if (links == null || links.length === 0) {
-        return null;
-    }
-    return (
-        <span className="sava-links">
-            {links.map((l, i) => (
-                <a
-                    key={i}
-                    className="sava-link"
-                    href={window.location.origin + '/#' + l.route}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                >
-                    {l.label} ↗
-                </a>
-            ))}
-        </span>
-    );
-}
-
-/** Tool calls rendered as a vertical activity log, one per line. */
-function ActivityLog({actions}: {actions: Array<ISavaAction>}) {
-    return (
-        <div className="sava-actions">
-            {actions.map((a, i) => (
-                <div className="sava-action" key={i} title={a.detail || ''}>
-                    <span className={'sava-action__icon ' + (a.ok ? 'is-ok' : 'is-fail')}>
-                        {a.ok ? '✓' : '✕'}
-                    </span>
-                    <code className="sava-action__tool">{a.tool}</code>
-                    <span className="sava-action__summary">{a.summary}</span>
-                    <LinkButtons links={a.links} />
-                </div>
-            ))}
-        </div>
-    );
-}
 
 export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void}) {
     const {gettext} = superdeskApi.localization;
@@ -129,6 +73,7 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
         }
 
         const p = pending;
+
         // Reflect the choice in the thread for continuity.
         setMessages((prev) => prev.concat({
             id: nextId.current++,
@@ -137,7 +82,7 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
         }));
         setPending(null);
         setLoading(true);
-        sendCommand('', conversation, {id: p.id, approved}).then(applyResult, applyError);
+        sendCommand('', conversation, {id: p.id, approved: approved}).then(applyResult, applyError);
     }
 
     function resetChat() {
@@ -150,73 +95,12 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
     }
 
     const isEmpty = messages.length === 0 && pending == null && !loading;
-
-    const rows: Array<React.ReactNode> = messages.map((m) => (
-        m.role === 'user' ? (
-            <div className="sava-row sava-row--user" key={m.id}>
-                <div className="sava-bubble sava-bubble--user">
-                    <div className="sava-text">{m.text}</div>
-                </div>
-            </div>
-        ) : (
-            <div className="sava-row sava-row--assistant" key={m.id}>
-                <div className="sava-avatar"><i className="big-icon--general-ai" /></div>
-                <div className="sava-bubble sava-bubble--assistant">
-                    {m.text ? (
-                        m.error ? (
-                            <div className="sava-text" data-error="true">{m.text}</div>
-                        ) : (
-                            <Markdown text={m.text} />
-                        )
-                    ) : null}
-                    {m.actions != null && m.actions.length > 0 && (
-                        <ActivityLog actions={m.actions} />
-                    )}
-                </div>
-            </div>
-        )
-    ));
+    const rows: Array<React.ReactNode> = messages.map((m) => <MessageRow key={m.id} message={m} />);
 
     if (loading) {
-        rows.push(
-            <div className="sava-row sava-row--assistant" key="typing">
-                <div className="sava-avatar"><i className="big-icon--general-ai" /></div>
-                <div className="sava-typing">
-                    <span className="sava-typing__dot" />
-                    <span className="sava-typing__dot" />
-                    <span className="sava-typing__dot" />
-                    <span className="sava-typing__label">{gettext('SAVA is working…')}</span>
-                </div>
-            </div>,
-        );
-    }
-
-    if (pending != null && !loading) {
-        rows.push(
-            <div className="sava-row sava-row--assistant" key="pending">
-                <div className="sava-avatar"><i className="big-icon--general-ai" /></div>
-                <div className="sava-confirm">
-                    <div className="sava-confirm__title">{pending.title}</div>
-                    {pending.links != null && pending.links.length > 0 && (
-                        <div className="sava-confirm__links"><LinkButtons links={pending.links} /></div>
-                    )}
-                    <div className="sava-confirm__actions">
-                        <button
-                            className="sava-confirm__btn sava-confirm__btn--cancel"
-                            onClick={() => decide(false)}
-                        >
-                            {pending.cancel_label}
-                        </button>
-                        <button
-                            className="sava-confirm__btn sava-confirm__btn--confirm"
-                            onClick={() => decide(true)}
-                        >
-                            {pending.confirm_label}
-                        </button>
-                    </div>
-                </div>
-            </div>,
-        );
+        rows.push(<TypingRow key="typing" label={gettext('SAVA is working…')} />);
+    } else if (pending != null) {
+        rows.push(<PendingCard key="pending" pending={pending} onDecide={decide} />);
     }
 
     return (
@@ -224,7 +108,10 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
             <MainContainer>
                 <ChatContainer>
                     <ConversationHeader>
-                        <ConversationHeader.Content userName="SAVA" info={gettext('Ask me to do things in Superdesk')} />
+                        <ConversationHeader.Content
+                            userName="SAVA"
+                            info={gettext('Ask me to do things in Superdesk')}
+                        />
                         <ConversationHeader.Actions>
                             <button
                                 className="btn btn--small"

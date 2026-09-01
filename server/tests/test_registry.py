@@ -147,3 +147,16 @@ def test_every_write_tool_declares_a_privilege():
         if not name.startswith("sava_test_") and not name.startswith(read_only_prefixes) and not t.privilege
     ]
     assert missing == []
+
+
+def test_get_openai_tools_cache_refreshes_on_new_registration():
+    before = get_openai_tools()
+    assert get_openai_tools() is before  # cached between calls
+
+    @tool(name="sava_test_late", description="late", parameters={"type": "object", "properties": {}})
+    async def _late(args, ctx):
+        return ToolResult(ok=True, summary="ok", for_model="ok")
+
+    after = get_openai_tools()
+    assert after is not before
+    assert "sava_test_late" in {s["function"]["name"] for s in after}

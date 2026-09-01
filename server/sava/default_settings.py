@@ -1,11 +1,14 @@
 """SAVA configuration.
 
 Fallback defaults live here. Override any of them via an environment variable
-of the same name (typically set in the Superdesk server ``.env`` file). A client
-that wants a different model only needs to set ``SAVA_MODEL``.
+of the same name (typically set in the Superdesk server ``.env`` file) or by
+defining it in the Superdesk ``settings.py``. Environment wins over settings.py,
+which wins over the defaults here. A client that wants a different model only
+needs to set ``SAVA_MODEL``.
 """
 
 import os
+from typing import Optional
 
 # --- Fallback defaults -------------------------------------------------------
 
@@ -38,9 +41,26 @@ _DEFAULTS = {
 }
 
 
+def _app_config(name: str) -> Optional[str]:
+    """The value from the running Superdesk app's config (settings.py), if any."""
+    try:
+        from superdesk.core import get_app_config
+
+        value = get_app_config(name)
+    except Exception:  # noqa: BLE001 - no app context (tests, tooling)
+        return None
+    return None if value is None else str(value)
+
+
 def get_setting(name: str) -> str:
-    """Resolve a ``SAVA_*`` setting: environment first, then the fallback default."""
-    return os.environ.get(name, str(_DEFAULTS.get(name, "")))
+    """Resolve a ``SAVA_*`` setting: environment, then Superdesk app config, then
+    the fallback default."""
+    value = os.environ.get(name)
+    if value is None:
+        value = _app_config(name)
+    if value is None:
+        value = str(_DEFAULTS.get(name, ""))
+    return value
 
 
 def get_int_setting(name: str, minimum: int = 1) -> int:

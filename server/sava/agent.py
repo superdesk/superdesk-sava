@@ -12,7 +12,8 @@ card; the user's decision comes back on the next request and the loop resumes.
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional, Set
+import time
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .default_settings import get_setting, get_int_setting
 from .tools import Tool, ToolContext, ToolLink, get_openai_tools, get_tool, run_tool
@@ -102,17 +103,29 @@ def _date_context() -> str:
     )
 
 
+_CLIENT: Dict[Tuple[str, str], Any] = {}
+
+
 def _build_client():
-    """Create an AsyncOpenAI client pointed at OpenRouter, or None if unconfigured."""
+    """The AsyncOpenAI client for the configured endpoint, or None if unconfigured.
+
+    Cached per (key, base URL) so the underlying HTTP connection pool is reused
+    across requests instead of being rebuilt, and re-created if the settings change.
+    """
     api_key = get_setting("SAVA_OPENROUTER_API_KEY")
     if not api_key:
         return None
-    try:
-        from openai import AsyncOpenAI
-    except ImportError:
-        logger.error("SAVA: the 'openai' package is not installed.")
-        return None
-    return AsyncOpenAI(api_key=api_key, base_url=get_setting("SAVA_OPENROUTER_BASE_URL"))
+    base_url = get_setting("SAVA_OPENROUTER_BASE_URL")
+    cache_key = (api_key, base_url)
+    if cache_key not in _CLIENT:
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            logger.error("SAVA: the 'openai' package is not installed.")
+            return None
+        _CLIENT.clear()
+        _CLIENT[cache_key] = AsyncOpenAI(api_key=api_key, base_url=base_url)
+    return _CLIENT[cache_key]
 
 
 # Some models (e.g. gpt-oss via its "harmony" format) leak a channel marker like
@@ -273,6 +286,13 @@ async def _resolve_tool_calls(
     return None
 
 
+def _add_usage(total: Dict[str, int], usage: Any) -> None:
+    for key in total:
+        value = getattr(usage, key, None)
+        if isinstance(value, int):
+            total[key] += value
+
+
 async def run_agent(
     prompt: str,
     user: Optional[Dict[str, Any]],
@@ -284,29 +304,43 @@ async def run_agent(
     confirmation card the client must resolve (or None)."""
     prior = _sanitize_history(history)
     ctx = ToolContext(user=user)
+    model = get_setting("SAVA_MODEL")
+    max_steps = get_int_setting("SAVA_MAX_STEPS")
+    actions: List[Dict[str, Any]] = []
+    started = time.monotonic()
+    steps = 0
+    usage = {"prompt_tokens": 0, "completion_tokens": 0}
+
+    def finish(
+        reply: str, messages: List[Dict[str, Any]], pending: Optional[Dict[str, Any]] = None, outcome: str = "ok"
+    ):
+        # One structured line per turn: the data behind any cost/latency discussion.
+        logger.info(
+            "SAVA turn: model=%s outcome=%s steps=%d tools=%s prompt_tokens=%d completion_tokens=%d ms=%d user=%s",
+            model,
+            outcome,
+            steps,
+            ",".join(a["tool"] for a in actions) or "-",
+            usage["prompt_tokens"],
+            usage["completion_tokens"],
+            int((time.monotonic() - started) * 1000),
+            (user or {}).get("_id", "-"),
+        )
+        return {"reply": reply, "actions": actions, "conversation": _trim_history(messages), "pending": pending}
 
     client = _build_client()
     if client is None:
-        return {
-            "reply": (
-                "SAVA is not configured. Set SAVA_OPENROUTER_API_KEY (and optionally "
-                "SAVA_MODEL) in the server environment."
-            ),
-            "actions": [],
-            "conversation": prior,
-            "pending": None,
-        }
-
-    model = get_setting("SAVA_MODEL")
-    max_steps = get_int_setting("SAVA_MAX_STEPS")
+        return finish(
+            "SAVA is not configured. Set SAVA_OPENROUTER_API_KEY (and optionally "
+            "SAVA_MODEL) in the server environment.",
+            prior,
+            outcome="unconfigured",
+        )
 
     approved: Set[str] = set()
     denied: Set[str] = set()
     if isinstance(decision, dict) and isinstance(decision.get("id"), str):
         (approved if decision.get("approved") else denied).add(decision["id"])
-
-    actions: List[Dict[str, Any]] = []
-    reply = "Done."
 
     messages: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.extend(prior)
@@ -320,14 +354,10 @@ async def run_agent(
         #    (handles both fresh turns and resumes after an approval).
         pending = await _resolve_tool_calls(messages, actions, ctx, approved, denied)
         if pending is not None:
-            return {
-                "reply": "",
-                "actions": actions,
-                "conversation": _trim_history(messages[1:]),
-                "pending": pending,
-            }
+            return finish("", messages[1:], pending=pending, outcome="pending")
 
         # 2. Ask the model what to do next.
+        steps += 1
         try:
             response = await client.chat.completions.create(
                 model=model,
@@ -338,25 +368,16 @@ async def run_agent(
             )
         except Exception as exc:  # noqa: BLE001 - report model/transport failures
             logger.exception("SAVA model call failed")
-            return {
-                "reply": f"The AI request failed: {exc}",
-                "actions": actions,
-                "conversation": _trim_history(messages[1:]),
-                "pending": None,
-            }
+            return finish(f"The AI request failed: {exc}", messages[1:], outcome="model_error")
 
+        _add_usage(usage, getattr(response, "usage", None))
         message = response.choices[0].message
         tool_calls = message.tool_calls or []
 
         if not tool_calls:
             reply = _clean_reply(message.content or "") or "Done."
             messages.append({"role": "assistant", "content": reply})
-            return {
-                "reply": reply,
-                "actions": actions,
-                "conversation": _trim_history(messages[1:]),
-                "pending": None,
-            }
+            return finish(reply, messages[1:])
 
         # Append the assistant's tool-call message; the loop resolves it on the
         # next iteration (step 1).
@@ -376,9 +397,6 @@ async def run_agent(
         )
 
     _close_dangling_tool_calls(messages, actions, "step limit reached")
-    return {
-        "reply": "I reached the step limit before fully finishing. Here is what I did.",
-        "actions": actions,
-        "conversation": _trim_history(messages[1:]),
-        "pending": None,
-    }
+    return finish(
+        "I reached the step limit before fully finishing. Here is what I did.", messages[1:], outcome="step_limit"
+    )

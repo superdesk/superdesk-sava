@@ -31,3 +31,22 @@ def test_get_int_setting_bad_value_falls_back_to_default(monkeypatch):
 def test_get_int_setting_clamps_to_minimum(monkeypatch):
     monkeypatch.setenv("SAVA_MAX_STEPS", "0")
     assert get_int_setting("SAVA_MAX_STEPS") == 1
+
+
+def test_get_setting_falls_back_to_app_config_before_default(monkeypatch):
+    from sava import default_settings
+
+    monkeypatch.delenv("SAVA_MODEL", raising=False)
+    monkeypatch.setattr(
+        default_settings, "_app_config", lambda name: "from/settings-py" if name == "SAVA_MODEL" else None
+    )
+    assert get_setting("SAVA_MODEL") == "from/settings-py"
+    assert get_setting("SAVA_MAX_STEPS") == "6"  # unset in app config -> default
+
+
+def test_get_setting_env_beats_app_config(monkeypatch):
+    from sava import default_settings
+
+    monkeypatch.setenv("SAVA_MODEL", "from/env")
+    monkeypatch.setattr(default_settings, "_app_config", lambda name: "from/settings-py")
+    assert get_setting("SAVA_MODEL") == "from/env"
