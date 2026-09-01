@@ -316,3 +316,12 @@ def test_system_prompt_names_only_registered_tools():
 
     mentioned = set(re.findall(r"\b[a-z]+(?:_[a-z]+)+\b", agent.SYSTEM_PROMPT)) - _PROMPT_NON_TOOLS
     assert mentioned <= set(_REGISTRY), sorted(mentioned - set(_REGISTRY))
+
+
+def test_package_logger_emits_info_by_default():
+    """Superdesk leaves the root logger at WARNING; the package must opt in to INFO
+    or the per-turn log line is silently dropped."""
+    import sava  # noqa: F401
+
+    assert logging.getLogger("sava").getEffectiveLevel() <= logging.INFO
+    assert logging.getLogger("sava.agent").isEnabledFor(logging.INFO)
