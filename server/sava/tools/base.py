@@ -58,6 +58,9 @@ class ToolContext:
     """Everything a tool needs to act as the current user and build responses."""
 
     user: Optional[Dict[str, Any]] = None
+    # Recorded as provenance on items the tools create or edit.
+    model: Optional[str] = None
+    conversation_id: Optional[str] = None
 
     def link_to_item(self, item_id: str, action: str = "edit", label: str = "Open in monitoring") -> ToolLink:
         return ToolLink(label=label, route=f"/workspace/monitoring?item={item_id}&action={action}")

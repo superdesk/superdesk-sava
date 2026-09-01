@@ -2,6 +2,7 @@ import superdesk
 
 from ..base import ToolContext, ToolResult, tool
 from ..lookups import find_desk
+from ..provenance import stamp_update
 
 
 @tool(
@@ -46,6 +47,12 @@ async def move_article(args, ctx: ToolContext) -> ToolResult:
     await superdesk.get_resource_service("move").move_content(
         article_id, {"task": {"desk": desk["_id"], "stage": stage_id}}
     )
+    archive = superdesk.get_resource_service("archive")
+    moved = await archive.find_one_async(req=None, _id=article_id)
+    if moved is not None:
+        provenance: dict = {}
+        stamp_update(provenance, moved, ctx, "move_article")
+        await archive.patch_async(article_id, provenance)
     return ToolResult(
         ok=True,
         summary=f"Moved to {desk.get('name')}",

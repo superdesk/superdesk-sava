@@ -5,6 +5,7 @@ from superdesk.utc import utcnow
 
 from ..base import ToolContext, ToolResult, tool
 from ..lookups import merge_extra_fields, planning_link, protected_note, valid_iso_datetime
+from ..provenance import stamp_new
 
 
 def _build_coverage(spec: Dict[str, Any]) -> Dict[str, Any]:
@@ -89,6 +90,7 @@ async def create_planning_item(args, ctx: ToolContext) -> ToolResult:
     # Any instance-specific fields the model gathered from describe_planning_profile.
     dropped = merge_extra_fields(item, args.get("fields"))
 
+    stamp_new(item, ctx, "create_planning_item")
     await superdesk.get_resource_service("planning").post_async([item])
     planning_id = str(item["_id"])
     cov_count = len(item.get("coverages") or [])

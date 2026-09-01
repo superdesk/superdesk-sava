@@ -30,6 +30,14 @@ SAVA_MAX_STEPS = 6
 SAVA_MAX_HISTORY_MESSAGES = 20
 
 
+# Visible provenance tag. When set (e.g. "AI-assisted"), items SAVA creates or
+# edits also get a `subject` entry with that name so they can be seen and
+# filtered in monitoring; the structured record under `extra.sava` is always
+# written. Create a vocabulary with the scheme's id to make the tag filterable.
+SAVA_PROVENANCE_TAG = ""
+SAVA_PROVENANCE_SCHEME = "sava"
+
+
 # --- Resolution --------------------------------------------------------------
 
 _DEFAULTS = {
@@ -38,6 +46,8 @@ _DEFAULTS = {
     "SAVA_OPENROUTER_BASE_URL": SAVA_OPENROUTER_BASE_URL,
     "SAVA_MAX_STEPS": SAVA_MAX_STEPS,
     "SAVA_MAX_HISTORY_MESSAGES": SAVA_MAX_HISTORY_MESSAGES,
+    "SAVA_PROVENANCE_TAG": SAVA_PROVENANCE_TAG,
+    "SAVA_PROVENANCE_SCHEME": SAVA_PROVENANCE_SCHEME,
 }
 
 

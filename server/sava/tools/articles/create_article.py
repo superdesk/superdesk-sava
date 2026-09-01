@@ -8,6 +8,7 @@ from superdesk.utc import utcnow
 
 from ..base import ToolContext, ToolResult, tool
 from ..lookups import get_content_profile, protected_note, resolve_desk_stage, strip_protected_fields
+from ..provenance import stamp_new
 
 
 @tool(
@@ -69,6 +70,7 @@ async def create_article(args, ctx: ToolContext) -> ToolResult:
     if desk is not None:
         item["task"] = {"desk": desk["_id"], "stage": stage_id}
 
+    stamp_new(item, ctx, "create_article")
     await superdesk.get_resource_service(ARCHIVE).post_async([item])
     await insert_into_versions_async(doc=item)
 

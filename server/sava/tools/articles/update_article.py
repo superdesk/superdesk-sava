@@ -2,6 +2,7 @@ import superdesk
 
 from ..base import ToolContext, ToolResult, tool
 from ..lookups import protected_note, strip_protected_fields
+from ..provenance import stamp_update
 
 
 @tool(
@@ -39,9 +40,14 @@ async def update_article(args, ctx: ToolContext) -> ToolResult:
             summary="No editable fields",
             for_model="None of the given fields can be edited directly." + protected_note(dropped),
         )
-    await superdesk.get_resource_service("archive").patch_async(article_id, updates)
+    service = superdesk.get_resource_service("archive")
+    original = await service.find_one_async(req=None, _id=article_id)
+    if original is None:
+        return ToolResult(ok=False, summary="Not found", for_model=f"No article found with id {article_id}.")
+    stamp_update(updates, original, ctx, "update_article")
+    await service.patch_async(article_id, updates)
 
-    changed = ", ".join(updates.keys())
+    changed = ", ".join(k for k in updates if k not in ("extra", "subject") or k in fields)
     return ToolResult(
         ok=True,
         summary=f"Updated {changed}",

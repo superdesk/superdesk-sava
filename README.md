@@ -84,6 +84,30 @@ then a small model call replaces that with a short title (best effort). Because
 this is a new resource, run the usual `python manage.py app:initialize_data` once
 after installing so its Mongo index is created.
 
+### Provenance
+
+Items SAVA creates or edits carry a record of it under `extra.sava` (the free-form
+dict articles, events and planning items share, so no schema change):
+
+```json
+"extra": {"sava": {"created": true, "actions": [
+  {"tool": "create_planning_item", "at": "2026-09-01T20:14:03+00:00",
+   "model": "openai/gpt-oss-120b", "user": "<user id>", "conversation": "<chat id>"}
+]}}
+```
+
+The human stays the item's creator; this only says which agent actions touched it
+and on whose behalf. Create, update, move, coverage and link tools write it.
+Workflow actions (publish, spike, post, cancel...) don't, because a published or
+spiked item can't simply be patched; the chat history records those.
+
+Set `SAVA_PROVENANCE_TAG` (e.g. `AI-assisted`) to also add a visible `subject`
+entry with that name (qcode is the slugified name, scheme `SAVA_PROVENANCE_SCHEME`,
+default `sava`) so agent-touched items can be seen and filtered in monitoring. To
+make the tag filterable, create a vocabulary whose id is the scheme containing that
+qcode. Note that `extra` (and `subject`) are part of NINJS publish output, so
+subscribers receive the provenance unless a formatter strips it.
+
 ### Streaming
 
 The canvas talks to `POST /sava/command/stream`, which returns server-sent

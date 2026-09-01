@@ -378,6 +378,7 @@ async def run_agent(
     history: Optional[List[Dict[str, Any]]] = None,
     decision: Optional[Dict[str, Any]] = None,
     on_event: Optional[EventHandler] = None,
+    conversation_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run one turn. Returns
     ``{"reply", "actions", "conversation", "pending"}`` where ``pending`` is a
@@ -389,8 +390,8 @@ async def run_agent(
     the history is left well-formed and whatever reply text arrived is kept.
     """
     prior = _sanitize_history(history)
-    ctx = ToolContext(user=user)
     model = get_setting("SAVA_MODEL")
+    ctx = ToolContext(user=user, model=model, conversation_id=conversation_id)
     max_steps = get_int_setting("SAVA_MAX_STEPS")
     actions: List[Dict[str, Any]] = []
     started = time.monotonic()

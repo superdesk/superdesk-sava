@@ -57,14 +57,33 @@ async def _run_turn(user: dict, payload: dict, on_event: Optional[EventHandler] 
         if conv is None:
             return {"reply": "That conversation no longer exists.", "actions": [], "pending": None}, 404
 
+    configured = _build_client() is not None
+    created_now = False
+    if conv is None and configured:
+        # Created up front so tools can record the conversation in item provenance.
+        conv = await conversations.create(user["_id"], conversations.fallback_title(prompt))
+        created_now = True
+
     try:
-        result = await run_agent(prompt, user, conv.messages if conv else [], decision, on_event)
+        result = await run_agent(
+            prompt,
+            user,
+            conv.messages if conv else [],
+            decision,
+            on_event,
+            conversation_id=str(conv.id) if conv else None,
+        )
     except Exception:  # noqa: BLE001 - never leak a raw traceback to the canvas
         logger.exception("SAVA command failed")
+        if conv is not None and created_now:
+            try:
+                await conversations.delete(conv)
+            except Exception:  # noqa: BLE001 - best effort tidy-up
+                logger.warning("SAVA: could not remove conversation %s after a failed first turn", conv.id)
         return {"reply": "Something went wrong handling that. Please try again.", "actions": [], "pending": None}, 500
 
     body: Dict[str, Any] = {"reply": result["reply"], "actions": result["actions"], "pending": result["pending"]}
-    if _build_client() is None:
+    if not configured or conv is None:
         # Not configured: the reply explains what to set; nothing worth keeping.
         return {**body, "conversation_id": None, "title": None}, 200
 
@@ -72,10 +91,7 @@ async def _run_turn(user: dict, payload: dict, on_event: Optional[EventHandler] 
     if result["reply"] or result["actions"]:
         new_turns.append({"role": "assistant", "text": result["reply"], "actions": result["actions"]})
 
-    title = None
-    if conv is None:
-        conv = await conversations.create(user["_id"], conversations.fallback_title(prompt))
-        title = await conversations.generate_title(prompt, result["reply"])
+    title = await conversations.generate_title(prompt, result["reply"]) if created_now else None
     await conversations.save_turn(conv, result["conversation"], new_turns, result["pending"], title=title)
 
     return {**body, "conversation_id": str(conv.id), "title": title or conv.title}, 200

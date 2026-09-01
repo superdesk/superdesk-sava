@@ -4,6 +4,7 @@ import superdesk
 
 from ..base import ToolContext, ToolResult, tool
 from ..lookups import merge_extra_fields, planning_link, protected_note, valid_iso_datetime
+from ..provenance import stamp_update
 
 
 @tool(
@@ -64,7 +65,9 @@ async def add_coverage(args, ctx: ToolContext) -> ToolResult:
 
     coverages.append({"planning": planning})
 
-    await service.patch_async(planning_id, {"coverages": coverages})
+    updates: Dict[str, Any] = {"coverages": coverages}
+    stamp_update(updates, item, ctx, "add_coverage")
+    await service.patch_async(planning_id, updates)
     return ToolResult(
         ok=True,
         summary=f"Added {coverage_type} coverage",

@@ -4,6 +4,7 @@ import superdesk
 
 from ..base import ToolContext, ToolResult, tool
 from ..lookups import instance_timezone, merge_extra_fields, planning_link, protected_note, valid_iso_datetime
+from ..provenance import stamp_new
 
 
 @tool(
@@ -73,6 +74,7 @@ async def create_event(args, ctx: ToolContext) -> ToolResult:
     # Any instance-specific fields the model gathered from describe_planning_profile.
     dropped = merge_extra_fields(item, args.get("fields"))
 
+    stamp_new(item, ctx, "create_event")
     await superdesk.get_resource_service("events").post_async([item])
     event_id = str(item["_id"])
     return ToolResult(

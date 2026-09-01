@@ -3,6 +3,7 @@ from typing import Any, Dict
 import superdesk
 
 from ..base import ToolContext, ToolResult, tool
+from ..provenance import stamp_update
 from ..lookups import planning_link, valid_iso_datetime
 
 
@@ -65,11 +66,13 @@ async def update_event(args, ctx: ToolContext) -> ToolResult:
     if not updates:
         return ToolResult(ok=False, summary="Nothing to update", for_model="No changed fields were provided.")
 
+    changed = ", ".join(updates.keys())
+    stamp_update(updates, event, ctx, "update_event")
     await service.patch_async(event_id, updates)
     return ToolResult(
         ok=True,
-        summary=f"Updated event ({', '.join(updates.keys())})",
-        for_model=f"Updated event id={event_id}; changed: {', '.join(updates.keys())}.",
+        summary=f"Updated event ({changed})",
+        for_model=f"Updated event id={event_id}; changed: {changed}.",
         data={"event_id": event_id},
         links=[planning_link()],
     )

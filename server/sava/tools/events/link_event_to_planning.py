@@ -2,6 +2,7 @@ import superdesk
 
 from ..base import ToolContext, ToolResult, tool
 from ..lookups import planning_link
+from ..provenance import stamp_update
 
 
 @tool(
@@ -48,7 +49,9 @@ async def link_event_to_planning(args, ctx: ToolContext) -> ToolResult:
         )
 
     related.append({"_id": event_id, "link_type": link_type})
-    await planning_service.patch_async(planning_id, {"related_events": related})
+    updates: dict = {"related_events": related}
+    stamp_update(updates, plan, ctx, "link_event_to_planning")
+    await planning_service.patch_async(planning_id, updates)
     return ToolResult(
         ok=True,
         summary="Linked event to planning item",
