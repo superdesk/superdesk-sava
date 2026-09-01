@@ -1,7 +1,5 @@
-import superdesk
-
 from ..base import ToolContext, ToolLink, ToolResult, tool
-from ..lookups import parse_size
+from ..lookups import mongo_find, parse_size
 
 
 @tool(
@@ -29,12 +27,7 @@ async def list_my_assignments(args, ctx: ToolContext) -> ToolResult:
 
     size = parse_size(args)
 
-    cursor = await superdesk.get_resource_service("assignments").get_from_mongo_async(req=None, lookup=lookup)
-    items = []
-    async for a in cursor:
-        items.append(a)
-        if len(items) >= size:
-            break
+    items = await mongo_find("assignments", lookup, '[("planning.scheduled", 1)]', size)
 
     if not items:
         return ToolResult(

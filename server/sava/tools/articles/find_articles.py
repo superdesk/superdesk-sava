@@ -1,21 +1,13 @@
-from datetime import timedelta
-
-from superdesk.utc import utcnow
-
 from ..base import ToolContext, ToolResult, tool
-from ..lookups import find_desk, find_user_by_name, format_article_results, parse_size, run_article_search
-
-
-def _date_range(date_filter: str):
-    now = utcnow()
-    start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    if date_filter == "today":
-        return {"gte": start_of_day.isoformat()}
-    if date_filter == "this_week":
-        return {"gte": (start_of_day - timedelta(days=7)).isoformat()}
-    if date_filter == "this_month":
-        return {"gte": (start_of_day - timedelta(days=30)).isoformat()}
-    return None
+from ..lookups import (
+    DATE_FILTER_DESCRIPTION,
+    elastic_date_filter,
+    find_desk,
+    find_user_by_name,
+    format_article_results,
+    parse_size,
+    run_article_search,
+)
 
 
 @tool(
@@ -37,7 +29,11 @@ def _date_range(date_filter: str):
                 "description": "Workflow states, e.g. ['submitted','in_progress','published'].",
             },
             "type": {"type": "string", "description": "Item type, e.g. 'text', 'picture'."},
-            "date_filter": {"type": "string", "enum": ["today", "this_week", "this_month"]},
+            "date_filter": {
+                "type": "string",
+                "enum": ["today", "this_week", "this_month"],
+                "description": DATE_FILTER_DESCRIPTION,
+            },
             "date_field": {
                 "type": "string",
                 "enum": ["versioncreated", "firstcreated", "firstpublished"],
@@ -84,7 +80,7 @@ async def find_articles(args, ctx: ToolContext) -> ToolResult:
     date_field = (args.get("date_field") or "versioncreated").strip()
     date_filter = (args.get("date_filter") or "").strip().lower()
     if date_filter:
-        rng = _date_range(date_filter)
+        rng = elastic_date_filter(date_filter)
         if rng:
             must.append({"range": {date_field: rng}})
 

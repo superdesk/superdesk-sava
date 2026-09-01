@@ -1,4 +1,5 @@
-from ..base import ToolContext, ToolLink, ToolResult, tool
+from ..base import ToolContext, ToolResult, tool
+from ..lookups import planning_link
 from ._actions import parse_dt, run_event_action
 
 
@@ -37,5 +38,5 @@ async def update_event_time(args, ctx: ToolContext) -> ToolResult:
         summary="Updated event time",
         for_model=f"Updated event id={event_id} time to {start} - {end}.",
         data={"event_id": event_id},
-        links=[ToolLink(label="Open planning", route="/planning")],
+        links=[planning_link()],
     )

@@ -1,4 +1,5 @@
-from ..base import ToolContext, ToolLink, ToolResult, tool
+from ..base import ToolContext, ToolResult, tool
+from ..lookups import planning_link
 from ._actions import run_event_action
 
 
@@ -41,5 +42,5 @@ async def cancel_event(args, ctx: ToolContext) -> ToolResult:
         summary="Cancelled event",
         for_model=f"Cancelled event id={event_id}.",
         data={"event_id": event_id},
-        links=[ToolLink(label="Open planning", route="/planning")],
+        links=[planning_link()],
     )

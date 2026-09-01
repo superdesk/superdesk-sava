@@ -1,6 +1,7 @@
 import superdesk
 
-from ..base import ToolContext, ToolLink, ToolResult, tool
+from ..base import ToolContext, ToolResult, tool
+from ..lookups import planning_link
 
 
 @tool(
@@ -30,5 +31,5 @@ async def unpost_planning_item(args, ctx: ToolContext) -> ToolResult:
         summary="Unposted planning item",
         for_model=f"Unposted planning item id={planning_id} (pubstatus=cancelled).",
         data={"planning_id": planning_id},
-        links=[ToolLink(label="Open planning", route="/planning")],
+        links=[planning_link()],
     )

@@ -2,17 +2,8 @@ from typing import Any, Dict
 
 import superdesk
 
-from ..base import ToolContext, ToolLink, ToolResult, tool
-from ..lookups import merge_extra_fields, protected_note, valid_iso_datetime
-
-
-def _default_timezone() -> str:
-    try:
-        from superdesk.core import get_app_config
-
-        return get_app_config("DEFAULT_TIMEZONE") or "UTC"
-    except Exception:  # noqa: BLE001
-        return "UTC"
+from ..base import ToolContext, ToolResult, tool
+from ..lookups import instance_timezone, merge_extra_fields, planning_link, protected_note, valid_iso_datetime
 
 
 @tool(
@@ -67,7 +58,7 @@ async def create_event(args, ctx: ToolContext) -> ToolResult:
             for_model=f"end '{end}' is not a valid ISO-8601 datetime (e.g. 2026-07-30T10:00:00).",
         )
 
-    tz = (args.get("timezone") or "").strip() or _default_timezone()
+    tz = (args.get("timezone") or "").strip() or instance_timezone()
     dates: Dict[str, Any] = {"start": start, "tz": tz}
     dates["end"] = end or start
 
@@ -90,5 +81,5 @@ async def create_event(args, ctx: ToolContext) -> ToolResult:
         detail=f"id {event_id}",
         for_model=f"Created event id={event_id} name='{name}' start={start} tz={tz}." + protected_note(dropped),
         data={"event_id": event_id, "name": name},
-        links=[ToolLink(label="Open planning", route="/planning")],
+        links=[planning_link()],
     )

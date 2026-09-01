@@ -3,8 +3,8 @@ from typing import Any, Dict
 import superdesk
 from superdesk.utc import utcnow
 
-from ..base import ToolContext, ToolLink, ToolResult, tool
-from ..lookups import merge_extra_fields, protected_note
+from ..base import ToolContext, ToolResult, tool
+from ..lookups import merge_extra_fields, planning_link, protected_note, valid_iso_datetime
 
 
 def _build_coverage(spec: Dict[str, Any]) -> Dict[str, Any]:
@@ -57,15 +57,32 @@ async def create_planning_item(args, ctx: ToolContext) -> ToolResult:
             ok=False, summary="No slugline", for_model="A slugline is required to create a planning item."
         )
 
+    planning_date = (args.get("planning_date") or "").strip()
+    if planning_date and not valid_iso_datetime(planning_date):
+        return ToolResult(
+            ok=False,
+            summary="Invalid planning_date",
+            for_model=f"planning_date '{planning_date}' is not a valid ISO-8601 datetime (e.g. 2026-07-30T09:00:00).",
+        )
+    coverages = args.get("coverages")
+    if isinstance(coverages, list):
+        for spec in coverages:
+            scheduled = spec.get("scheduled") if isinstance(spec, dict) else None
+            if scheduled and not valid_iso_datetime(str(scheduled)):
+                return ToolResult(
+                    ok=False,
+                    summary="Invalid coverage scheduled",
+                    for_model=f"coverage scheduled '{scheduled}' is not a valid ISO-8601 datetime.",
+                )
+
     item: Dict[str, Any] = {
         "slugline": slugline,
-        "planning_date": args.get("planning_date") or utcnow().isoformat(),
+        "planning_date": planning_date or utcnow().isoformat(),
     }
     for key in ("headline", "name", "description_text"):
         if args.get(key):
             item[key] = args[key]
 
-    coverages = args.get("coverages")
     if isinstance(coverages, list) and coverages:
         item["coverages"] = [_build_coverage(c) for c in coverages if isinstance(c, dict)]
 
@@ -83,5 +100,5 @@ async def create_planning_item(args, ctx: ToolContext) -> ToolResult:
             f"planning_date={item['planning_date']} coverages={cov_count}." + protected_note(dropped)
         ),
         data={"planning_id": planning_id, "coverages": cov_count},
-        links=[ToolLink(label="Open planning", route="/planning")],
+        links=[planning_link()],
     )

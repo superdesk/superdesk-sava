@@ -1,21 +1,24 @@
-from datetime import timedelta
-
-import superdesk
-from superdesk.utc import utcnow
-
-from ..base import ToolContext, ToolLink, ToolResult, tool
-from ..lookups import contains, parse_size
+from ..base import ToolContext, ToolResult, tool
+from ..lookups import (
+    DATE_FILTERS,
+    DATE_FILTER_DESCRIPTION,
+    contains,
+    mongo_date_filter,
+    mongo_find,
+    parse_size,
+    planning_link,
+)
 
 
 @tool(
     name="search_planning",
     domain="planning",
-    description="Search/list planning items by slugline text and/or date (today, this_week, future).",
+    description="Search/list planning items by slugline text and/or date, soonest first.",
     parameters={
         "type": "object",
         "properties": {
             "query": {"type": "string", "description": "Text to match against the slugline."},
-            "date_filter": {"type": "string", "enum": ["today", "this_week", "future"]},
+            "date_filter": {"type": "string", "enum": DATE_FILTERS, "description": DATE_FILTER_DESCRIPTION},
             "size": {"type": "integer", "description": "Max results (default 25)."},
         },
     },
@@ -28,26 +31,15 @@ async def search_planning(args, ctx: ToolContext) -> ToolResult:
         conditions.append({"slugline": contains(text)})
 
     date_filter = (args.get("date_filter") or "").strip().lower()
-    if date_filter:
-        now = utcnow()
-        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        if date_filter == "today":
-            conditions.append({"planning_date": {"$gte": start_of_day, "$lt": start_of_day + timedelta(days=1)}})
-        elif date_filter == "this_week":
-            conditions.append({"planning_date": {"$gte": start_of_day - timedelta(days=7)}})
-        elif date_filter == "future":
-            conditions.append({"planning_date": {"$gte": now}})
+    window = mongo_date_filter(date_filter) if date_filter else None
+    if window:
+        conditions.append({"planning_date": window})
 
     lookup = {"$and": conditions} if len(conditions) > 1 else conditions[0]
 
     size = parse_size(args)
 
-    cursor = await superdesk.get_resource_service("planning").get_from_mongo_async(req=None, lookup=lookup)
-    items = []
-    async for item in cursor:
-        items.append(item)
-        if len(items) >= size:
-            break
+    items = await mongo_find("planning", lookup, '[("planning_date", 1)]', size)
 
     if not items:
         return ToolResult(
@@ -64,5 +56,5 @@ async def search_planning(args, ctx: ToolContext) -> ToolResult:
         summary=f"Found {len(items)} planning item(s)",
         for_model=f"Found {len(items)} planning item(s):\n" + "\n".join(lines),
         data={"count": len(items)},
-        links=[ToolLink(label="Open planning", route="/planning")],
+        links=[planning_link()],
     )

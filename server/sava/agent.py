@@ -92,14 +92,10 @@ def _date_context() -> str:
     """
     from superdesk.utc import utcnow
 
-    now = utcnow()
-    tz = "UTC"
-    try:
-        from superdesk.core import get_app_config
+    from .tools.lookups import instance_timezone
 
-        tz = get_app_config("DEFAULT_TIMEZONE") or "UTC"
-    except Exception:  # noqa: BLE001
-        pass
+    now = utcnow()
+    tz = instance_timezone()
     return (
         f"Context: the current date/time is {now.isoformat()} (UTC); the instance "
         f"timezone is {tz}. Use these to compute relative dates like 'today' or 'Friday'."

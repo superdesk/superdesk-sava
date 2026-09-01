@@ -2,8 +2,8 @@ from typing import Any, Dict
 
 import superdesk
 
-from ..base import ToolContext, ToolLink, ToolResult, tool
-from ..lookups import valid_iso_datetime
+from ..base import ToolContext, ToolResult, tool
+from ..lookups import planning_link, valid_iso_datetime
 
 
 @tool(
@@ -71,5 +71,5 @@ async def update_event(args, ctx: ToolContext) -> ToolResult:
         summary=f"Updated event ({', '.join(updates.keys())})",
         for_model=f"Updated event id={event_id}; changed: {', '.join(updates.keys())}.",
         data={"event_id": event_id},
-        links=[ToolLink(label="Open planning", route="/planning")],
+        links=[planning_link()],
     )

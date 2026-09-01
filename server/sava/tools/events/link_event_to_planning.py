@@ -1,6 +1,7 @@
 import superdesk
 
-from ..base import ToolContext, ToolLink, ToolResult, tool
+from ..base import ToolContext, ToolResult, tool
+from ..lookups import planning_link
 
 
 @tool(
@@ -53,5 +54,5 @@ async def link_event_to_planning(args, ctx: ToolContext) -> ToolResult:
         summary="Linked event to planning item",
         for_model=f"Linked event id={event_id} to planning item id={planning_id} as {link_type}.",
         data={"event_id": event_id, "planning_id": planning_id},
-        links=[ToolLink(label="Open planning", route="/planning")],
+        links=[planning_link()],
     )

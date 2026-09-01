@@ -2,8 +2,8 @@ from typing import Any, Dict
 
 import superdesk
 
-from ..base import ToolContext, ToolLink, ToolResult, tool
-from ..lookups import merge_extra_fields, protected_note
+from ..base import ToolContext, ToolResult, tool
+from ..lookups import merge_extra_fields, planning_link, protected_note, valid_iso_datetime
 
 
 @tool(
@@ -38,6 +38,14 @@ async def add_coverage(args, ctx: ToolContext) -> ToolResult:
     if not planning_id:
         return ToolResult(ok=False, summary="No planning id", for_model="A planning_id is required.")
 
+    scheduled = (args.get("scheduled") or "").strip()
+    if scheduled and not valid_iso_datetime(scheduled):
+        return ToolResult(
+            ok=False,
+            summary="Invalid scheduled",
+            for_model=f"scheduled '{scheduled}' is not a valid ISO-8601 datetime (e.g. 2026-07-30T09:00:00).",
+        )
+
     service = superdesk.get_resource_service("planning")
     item = await service.find_one_async(req=None, _id=planning_id)
     if item is None:
@@ -49,8 +57,8 @@ async def add_coverage(args, ctx: ToolContext) -> ToolResult:
     planning: Dict[str, Any] = {"g2_content_type": coverage_type}
     if args.get("slugline"):
         planning["slugline"] = args["slugline"]
-    if args.get("scheduled"):
-        planning["scheduled"] = args["scheduled"]
+    if scheduled:
+        planning["scheduled"] = scheduled
 
     dropped = merge_extra_fields(planning, args.get("fields"))
 
@@ -65,5 +73,5 @@ async def add_coverage(args, ctx: ToolContext) -> ToolResult:
             f"(now {len(coverages)} coverage(s))." + protected_note(dropped)
         ),
         data={"planning_id": planning_id, "coverages": len(coverages)},
-        links=[ToolLink(label="Open planning", route="/planning")],
+        links=[planning_link()],
     )

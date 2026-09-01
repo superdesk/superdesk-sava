@@ -1,6 +1,7 @@
 import superdesk
 
-from ..base import ToolContext, ToolLink, ToolResult, tool
+from ..base import ToolContext, ToolResult, tool
+from ..lookups import planning_link
 
 
 @tool(
@@ -42,5 +43,5 @@ async def postpone_planning_item(args, ctx: ToolContext) -> ToolResult:
         summary="Postponed planning item",
         for_model=f"Postponed planning item id={planning_id}.",
         data={"planning_id": planning_id},
-        links=[ToolLink(label="Open planning", route="/planning")],
+        links=[planning_link()],
     )

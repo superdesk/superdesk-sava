@@ -1,8 +1,9 @@
 """Shared, non-tool helpers used by multiple SAVA tools."""
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 import superdesk
 from eve.utils import ParsedRequest
@@ -30,6 +31,84 @@ def valid_iso_datetime(value: Any) -> bool:
     except ValueError:
         return False
     return True
+
+
+# --- instance context --------------------------------------------------------
+
+
+def instance_timezone() -> str:
+    """The instance's configured timezone name (``DEFAULT_TIMEZONE``), or UTC."""
+    try:
+        from superdesk.core import get_app_config
+
+        return get_app_config("DEFAULT_TIMEZONE") or "UTC"
+    except Exception:  # noqa: BLE001 - outside an app context
+        return "UTC"
+
+
+def planning_link(label: str = "Open planning") -> ToolLink:
+    return ToolLink(label=label, route="/planning")
+
+
+# --- date filters ------------------------------------------------------------
+
+DATE_FILTERS = ["today", "this_week", "this_month", "future"]
+
+DATE_FILTER_DESCRIPTION = (
+    "today = the current day; this_week = the current Monday-to-Sunday week; "
+    "this_month = the current calendar month; future = from now onwards. "
+    "Day boundaries follow the instance timezone. Same meaning in every search tool."
+)
+
+
+def date_window(date_filter: str, now: Optional[datetime] = None) -> Optional[Tuple[datetime, Optional[datetime]]]:
+    """Half-open ``[start, end)`` UTC window for a ``date_filter`` value, with day
+    boundaries computed in the instance timezone. ``end`` is None for open-ended
+    windows. Returns None for an unknown filter.
+    """
+    try:
+        tz = ZoneInfo(instance_timezone())
+    except Exception:  # noqa: BLE001 - unknown zone name
+        tz = ZoneInfo("UTC")
+    now_utc = now or datetime.now(timezone.utc)
+    local = now_utc.astimezone(tz)
+    day = local.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if date_filter == "today":
+        start, end = day, day + timedelta(days=1)
+    elif date_filter == "this_week":
+        start = day - timedelta(days=day.weekday())
+        end = start + timedelta(days=7)
+    elif date_filter == "this_month":
+        start = day.replace(day=1)
+        end = (start + timedelta(days=32)).replace(day=1)
+    elif date_filter == "future":
+        return now_utc, None
+    else:
+        return None
+    return start.astimezone(timezone.utc), end.astimezone(timezone.utc)
+
+
+def mongo_date_filter(date_filter: str) -> Optional[Dict[str, Any]]:
+    window = date_window(date_filter)
+    if window is None:
+        return None
+    start, end = window
+    clause: Dict[str, Any] = {"$gte": start}
+    if end is not None:
+        clause["$lt"] = end
+    return clause
+
+
+def elastic_date_filter(date_filter: str) -> Optional[Dict[str, str]]:
+    window = date_window(date_filter)
+    if window is None:
+        return None
+    start, end = window
+    clause = {"gte": start.isoformat()}
+    if end is not None:
+        clause["lt"] = end.isoformat()
+    return clause
 
 
 # --- model-input guards ------------------------------------------------------
@@ -213,6 +292,24 @@ def split_required_optional(schema: Optional[Dict[str, Any]]) -> Tuple[List[str]
         else:
             optional.append(field_name)
     return required, optional
+
+
+# --- mongo search ----------------------------------------------------------
+
+
+async def mongo_find(resource: str, lookup: Dict[str, Any], sort: str, size: int) -> List[Dict[str, Any]]:
+    """Sorted, size-capped read straight from Mongo. ``sort`` uses Eve's literal
+    form, e.g. ``'[("planning_date", 1)]'``."""
+    req = ParsedRequest()
+    req.sort = sort
+    req.max_results = size
+    cursor = await superdesk.get_resource_service(resource).get_from_mongo_async(req=req, lookup=lookup)
+    items: List[Dict[str, Any]] = []
+    async for item in cursor:
+        items.append(item)
+        if len(items) >= size:
+            break
+    return items
 
 
 # --- article search --------------------------------------------------------
