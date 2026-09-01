@@ -6,6 +6,7 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
 @tool(
     name="unspike_event",
     domain="events",
+    privilege="planning_event_unspike",
     description="Unspike a previously spiked event, restoring it to the workflow.",
     parameters={
         "type": "object",

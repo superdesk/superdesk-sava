@@ -5,6 +5,7 @@ from ._actions import lock_event, parse_dt
 @tool(
     name="reschedule_event",
     domain="events",
+    privilege="planning_event_management",
     description=(
         "Reschedule an event to a new start/end date/time. Datetimes must be ISO 8601. "
         "Related coverages are cancelled by this action."

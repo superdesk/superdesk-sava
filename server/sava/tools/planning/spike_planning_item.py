@@ -6,6 +6,7 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
 @tool(
     name="spike_planning_item",
     domain="planning",
+    privilege="planning_planning_spike",
     description="Spike (soft-delete) a planning item, removing it from the workflow. Reversible via unspike.",
     parameters={
         "type": "object",

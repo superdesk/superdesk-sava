@@ -131,10 +131,80 @@ def _clean_reply(text: str) -> str:
     return _CHANNEL_PREFIX.sub("", text.strip())
 
 
+def _sanitize_message(m: Any) -> Optional[Dict[str, Any]]:
+    """Rebuild one client-supplied history message from known fields only.
+
+    The client round-trips the conversation verbatim, so it is untrusted input:
+    only user/assistant/tool roles are accepted (a client-supplied ``system``
+    message would override the prompt), and each message is reduced to the fields
+    the model API expects so nothing else rides along.
+    """
+    if not isinstance(m, dict):
+        return None
+    role = m.get("role")
+    content = m.get("content")
+    if role not in ("user", "assistant", "tool") or not isinstance(content, (str, type(None))):
+        return None
+    clean: Dict[str, Any] = {"role": role, "content": content or ""}
+
+    if role == "tool":
+        tool_call_id = m.get("tool_call_id")
+        if not isinstance(tool_call_id, str) or not tool_call_id:
+            return None
+        clean["tool_call_id"] = tool_call_id
+        return clean
+
+    if role == "assistant" and m.get("tool_calls") is not None:
+        calls = []
+        for tc in m["tool_calls"] if isinstance(m["tool_calls"], list) else []:
+            fn = tc.get("function") if isinstance(tc, dict) else None
+            if not isinstance(fn, dict) or not isinstance(tc.get("id"), str) or not isinstance(fn.get("name"), str):
+                return None
+            arguments = fn.get("arguments")
+            calls.append(
+                {
+                    "id": tc["id"],
+                    "type": "function",
+                    "function": {"name": fn["name"], "arguments": arguments if isinstance(arguments, str) else "{}"},
+                }
+            )
+        if calls:
+            clean["tool_calls"] = calls
+    return clean
+
+
 def _sanitize_history(history: Any) -> List[Dict[str, Any]]:
     if not isinstance(history, list):
         return []
-    return [m for m in history if isinstance(m, dict) and m.get("role")]
+    cleaned = [_sanitize_message(m) for m in history]
+    return [m for m in cleaned if m is not None]
+
+
+def _unresolved_tool_calls(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Tool calls on the trailing assistant message that have no tool result yet."""
+    if not messages:
+        return []
+    trailing = messages[-1]
+    if trailing.get("role") != "assistant" or not trailing.get("tool_calls"):
+        return []
+    resolved_ids = {m.get("tool_call_id") for m in messages if m.get("role") == "tool"}
+    return [tc for tc in trailing["tool_calls"] if tc["id"] not in resolved_ids]
+
+
+def _close_dangling_tool_calls(messages: List[Dict[str, Any]], actions: List[Dict[str, Any]], reason: str) -> None:
+    """Append a synthetic result for every unresolved tool call on the trailing
+    assistant message.
+
+    The model API rejects a conversation where an assistant tool call is not
+    followed by its tool result, so leaving one dangling (step limit hit, or the
+    user typed a new message instead of answering a confirmation) would break every
+    later turn. Closing them keeps the history well-formed.
+    """
+    for tc in _unresolved_tool_calls(messages):
+        messages.append({"role": "tool", "tool_call_id": tc["id"], "content": f"Not executed: {reason}"})
+        actions.append(
+            {"tool": tc["function"]["name"], "ok": False, "summary": f"Not run ({reason})", "detail": None, "links": []}
+        )
 
 
 def _trim_history(conversation: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -176,19 +246,8 @@ async def _resolve_tool_calls(
     Returns a ``pending`` dict if a confirmation-gated call is awaiting a decision
     (and stops there), otherwise None once all calls are resolved.
     """
-    if not messages:
-        return None
-    trailing = messages[-1]
-    if trailing.get("role") != "assistant" or not trailing.get("tool_calls"):
-        return None
-
-    resolved_ids = {m.get("tool_call_id") for m in messages if m.get("role") == "tool"}
-
-    for tc in trailing["tool_calls"]:
+    for tc in _unresolved_tool_calls(messages):
         tc_id = tc["id"]
-        if tc_id in resolved_ids:
-            continue
-
         name = tc["function"]["name"]
         try:
             args = json.loads(tc["function"].get("arguments") or "{}")
@@ -245,18 +304,20 @@ async def run_agent(
     model = get_setting("SAVA_MODEL")
     max_steps = get_int_setting("SAVA_MAX_STEPS")
 
-    messages: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
-    messages.extend(prior)
-    if prompt:
-        messages.append({"role": "user", "content": f"{_date_context()}\n\n{prompt}"})
-
     approved: Set[str] = set()
     denied: Set[str] = set()
-    if isinstance(decision, dict) and decision.get("id"):
+    if isinstance(decision, dict) and isinstance(decision.get("id"), str):
         (approved if decision.get("approved") else denied).add(decision["id"])
 
     actions: List[Dict[str, Any]] = []
     reply = "Done."
+
+    messages: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages.extend(prior)
+    if prompt:
+        # A new message supersedes any confirmation still waiting on the tail.
+        _close_dangling_tool_calls(messages, actions, "the user sent a new message instead of a decision")
+        messages.append({"role": "user", "content": f"{_date_context()}\n\n{prompt}"})
 
     for _ in range(max_steps):
         # 1. Resolve any pending tool_calls on the trailing assistant message
@@ -318,6 +379,7 @@ async def run_agent(
             }
         )
 
+    _close_dangling_tool_calls(messages, actions, "step limit reached")
     return {
         "reply": "I reached the step limit before fully finishing. Here is what I did.",
         "actions": actions,

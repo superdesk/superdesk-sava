@@ -6,6 +6,7 @@ from ..base import ToolContext, ToolResult, tool
 @tool(
     name="unspike_article",
     domain="articles",
+    privilege="unspike",
     description="Unspike a previously spiked article, restoring it to the workflow.",
     parameters={
         "type": "object",

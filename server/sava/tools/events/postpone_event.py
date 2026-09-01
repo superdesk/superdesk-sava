@@ -5,6 +5,7 @@ from ._actions import lock_event
 @tool(
     name="postpone_event",
     domain="events",
+    privilege="planning_event_management",
     description="Postpone an event, marking it and its related planning as postponed.",
     parameters={
         "type": "object",

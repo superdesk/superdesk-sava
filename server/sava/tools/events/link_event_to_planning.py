@@ -6,6 +6,7 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
 @tool(
     name="link_event_to_planning",
     domain="events",
+    privilege="planning_planning_management",
     description="Link an event to an existing planning item (adds it to the planning item's related events).",
     parameters={
         "type": "object",

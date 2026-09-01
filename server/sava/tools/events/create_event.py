@@ -18,6 +18,7 @@ def _default_timezone() -> str:
 @tool(
     name="create_event",
     domain="events",
+    privilege="planning_event_management",
     description=(
         "Create a calendar event. Requires a name and an ISO start datetime. Use the "
         "current date/time from your context to compute relative dates (e.g. 'Friday 9am')."

@@ -6,6 +6,7 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
 @tool(
     name="reschedule_planning_item",
     domain="planning",
+    privilege="planning_planning_management",
     description=(
         "Reschedule a planning item, marking it as rescheduled. Its coverages are cancelled by "
         "this action. A reason may be required by the instance."

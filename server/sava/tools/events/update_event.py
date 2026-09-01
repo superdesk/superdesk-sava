@@ -9,6 +9,7 @@ from ..lookups import valid_iso_datetime
 @tool(
     name="update_event",
     domain="events",
+    privilege="planning_event_management",
     description="Update an event's name, slugline, description, or dates (start/end/timezone).",
     parameters={
         "type": "object",

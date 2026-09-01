@@ -6,6 +6,7 @@ from ..base import ToolContext, ToolResult, tool
 @tool(
     name="publish_article",
     domain="articles",
+    privilege="publish",
     description=(
         "Publish an existing article by id. This makes it public. The platform asks the "
         "user to confirm before it runs, so you do not need to ask yourself — just call it "

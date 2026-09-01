@@ -13,6 +13,7 @@ from ..lookups import get_content_profile, resolve_desk_stage
 @tool(
     name="create_article",
     domain="articles",
+    privilege="archive",
     description=(
         "Create a new article. Pick a content profile (see list_content_profiles) and "
         "pass its fields (see describe_content_profile) in `fields`. Ask the user for any "

@@ -5,6 +5,7 @@ from ._actions import lock_event, parse_dt
 @tool(
     name="update_event_time",
     domain="events",
+    privilege="planning_event_management",
     description="Change an event's start/end date/time without rescheduling. Datetimes must be ISO 8601.",
     parameters={
         "type": "object",

@@ -8,6 +8,7 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
 @tool(
     name="add_coverage",
     domain="planning",
+    privilege="planning_planning_management",
     description=(
         "Add a coverage to an existing planning item. Coverage type is a g2_content_type "
         "qcode (text/picture/video/…; see list_coverage_types)."

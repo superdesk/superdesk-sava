@@ -6,6 +6,7 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
 @tool(
     name="unspike_planning_item",
     domain="planning",
+    privilege="planning_planning_unspike",
     description="Unspike a previously spiked planning item, restoring it to the workflow.",
     parameters={
         "type": "object",

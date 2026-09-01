@@ -20,6 +20,7 @@ def _build_coverage(spec: Dict[str, Any]) -> Dict[str, Any]:
 @tool(
     name="create_planning_item",
     domain="planning",
+    privilege="planning_planning_management",
     description=(
         "Create a planning item. `planning_date` is an ISO datetime (defaults to now). "
         "You can include coverages up front, each with a g2_content_type (see list_coverage_types)."

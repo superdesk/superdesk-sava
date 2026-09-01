@@ -5,6 +5,7 @@ from ._actions import lock_event
 @tool(
     name="cancel_event",
     domain="events",
+    privilege="planning_event_management",
     description=(
         "Cancel an event, marking it and its related planning as cancelled. "
         "A reason may be required by the instance."

@@ -7,6 +7,7 @@ from ..lookups import find_desk
 @tool(
     name="move_article",
     domain="articles",
+    privilege="archive",
     description="Send/move an article to a desk (and optionally a specific stage).",
     parameters={
         "type": "object",

@@ -95,3 +95,55 @@ def test_toolcontext_link_to_item():
     link = ToolContext().link_to_item("abc123")
     assert link.route == "/workspace/monitoring?item=abc123&action=edit"
     assert link.to_dict() == {"label": "Open in monitoring", "route": link.route}
+
+
+# --- privilege gating ---------------------------------------------------------
+
+
+@tool(
+    name="sava_test_privileged",
+    description="needs publish",
+    parameters={"type": "object", "properties": {}},
+    privilege="publish",
+)
+async def _privileged(args, ctx):
+    return ToolResult(ok=True, summary="published", for_model="published")
+
+
+async def test_privileged_tool_denied_without_privilege():
+    user = {"_id": "u1", "user_type": "user", "privileges": {}}
+    res = await run_tool("sava_test_privileged", {}, ToolContext(user=user))
+    assert res.ok is False
+    assert "publish" in res.for_model
+    assert res.summary == "Not permitted"
+
+
+async def test_privileged_tool_runs_with_user_privilege():
+    user = {"_id": "u1", "user_type": "user", "privileges": {"publish": 1}}
+    res = await run_tool("sava_test_privileged", {}, ToolContext(user=user))
+    assert res.ok is True
+    assert res.summary == "published"
+
+
+async def test_privileged_tool_runs_for_admin():
+    user = {"_id": "u1", "user_type": "administrator"}
+    res = await run_tool("sava_test_privileged", {}, ToolContext(user=user))
+    assert res.ok is True
+
+
+async def test_privileged_tool_skips_check_without_user():
+    # No user = system/worker context, mirroring Superdesk's own check_permissions.
+    res = await run_tool("sava_test_privileged", {}, ToolContext())
+    assert res.ok is True
+
+
+def test_every_write_tool_declares_a_privilege():
+    """Any tool that can change Superdesk state must be privilege-gated, since the
+    service calls bypass the HTTP-layer check. Read-only tools are the exception."""
+    read_only_prefixes = ("find_", "list_", "search_", "get_", "describe_")
+    missing = [
+        name
+        for name, t in _REGISTRY.items()
+        if not name.startswith("sava_test_") and not name.startswith(read_only_prefixes) and not t.privilege
+    ]
+    assert missing == []

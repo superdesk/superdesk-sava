@@ -6,6 +6,7 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
 @tool(
     name="spike_event",
     domain="events",
+    privilege="planning_event_spike",
     description="Spike (soft-delete) an event, removing it from the workflow. Reversible via unspike.",
     parameters={
         "type": "object",

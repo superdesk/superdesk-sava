@@ -6,6 +6,7 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
 @tool(
     name="unpost_planning_item",
     domain="planning",
+    privilege="planning_planning_unpost",
     description="Unpost a posted planning item, withdrawing it from publication (sets pubstatus to cancelled).",
     parameters={
         "type": "object",

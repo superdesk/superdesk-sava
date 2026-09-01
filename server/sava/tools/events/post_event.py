@@ -6,6 +6,7 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
 @tool(
     name="post_event",
     domain="events",
+    privilege="planning_event_post",
     description="Post (publish) an event so it appears in the public calendar. Requires user confirmation.",
     parameters={
         "type": "object",

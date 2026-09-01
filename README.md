@@ -82,6 +82,16 @@ the agent loop returns a `pending` action, the client shows an approval card
 (with a link to review the item in monitoring), and the user's decision comes back
 on the next request to resume — a real approval gate, server-enforced.
 
+### Privileges
+
+Tools call Superdesk services directly, which skips the privilege check the REST
+layer normally applies. So every write tool declares the same Superdesk privilege
+its resource requires (`@tool(..., privilege="publish")`), and `run_tool` refuses
+to run it for a user who lacks that privilege — using the same resolution as
+Superdesk itself (admins pass; otherwise role privileges merged with the user's
+own). Read-only tools declare none. A test fails the build if a non-read tool
+forgets to declare one.
+
 ### Runtime flow
 
 ```

@@ -6,6 +6,7 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
 @tool(
     name="unpost_event",
     domain="events",
+    privilege="planning_event_unpost",
     description="Unpost a posted event, withdrawing it from the public calendar (sets pubstatus to cancelled).",
     parameters={
         "type": "object",

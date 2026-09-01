@@ -6,6 +6,7 @@ from ..base import ToolContext, ToolLink, ToolResult, tool
 @tool(
     name="cancel_planning_item",
     domain="planning",
+    privilege="planning_planning_management",
     description="Cancel a planning item (and its coverages). A reason may be required by the instance.",
     parameters={
         "type": "object",

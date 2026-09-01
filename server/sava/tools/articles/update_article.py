@@ -6,6 +6,7 @@ from ..base import ToolContext, ToolResult, tool
 @tool(
     name="update_article",
     domain="articles",
+    privilege="archive",
     description=(
         "Edit an article's fields (headline, slugline, body_html, abstract, byline, "
         "ednote, priority, urgency, …). Pass only the fields to change."

@@ -75,6 +75,10 @@ class Tool:
     requires_confirmation: bool = False
     confirm_title: Optional[str] = None
     confirm_label: str = "Confirm"
+    # Superdesk privilege the user must hold (e.g. "publish"). Tools call services
+    # directly, bypassing the HTTP-layer privilege check, so every write tool must
+    # declare the same privilege its REST resource requires.
+    privilege: Optional[str] = None
 
 
 _REGISTRY: Dict[str, Tool] = {}
@@ -89,6 +93,7 @@ def tool(
     requires_confirmation: bool = False,
     confirm_title: Optional[str] = None,
     confirm_label: str = "Confirm",
+    privilege: Optional[str] = None,
 ) -> Callable[[ToolHandler], ToolHandler]:
     """Register an async handler as a SAVA tool."""
 
@@ -108,6 +113,7 @@ def tool(
             requires_confirmation=requires_confirmation,
             confirm_title=confirm_title,
             confirm_label=confirm_label,
+            privilege=privilege,
         )
         return fn
 
@@ -153,6 +159,31 @@ def _coerce_json_args(args: Dict[str, Any], parameters: Dict[str, Any]) -> Dict[
     return args
 
 
+def _current_role() -> Optional[Dict[str, Any]]:
+    """The role Superdesk resolved for this request, if we're inside one."""
+    try:
+        from quart import g
+
+        return getattr(g, "role", None)
+    except Exception:  # noqa: BLE001 - outside a request/app context
+        return None
+
+
+async def user_has_privilege(user: Dict[str, Any], privilege: str) -> bool:
+    """Same resolution as Superdesk's own privilege rules: admins pass, otherwise
+    the user's role privileges merged with their own must include ``privilege``."""
+    from superdesk.users.async_service import get_privileges, is_admin
+
+    if is_admin(user):
+        return True
+    role = _current_role()
+    if role is None and user.get("role"):
+        import superdesk
+
+        role = await superdesk.get_resource_service("roles").find_one_async(req=None, _id=user["role"])
+    return bool(get_privileges(user, role).get(privilege, False))
+
+
 async def run_tool(name: str, args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
     """Execute a registered tool, turning any exception into a failed result so
     one bad call never crashes the whole request."""
@@ -164,6 +195,17 @@ async def run_tool(name: str, args: Dict[str, Any], ctx: ToolContext) -> ToolRes
             for_model=f"Error: unknown tool '{name}'.",
         )
     try:
+        # Mirror the HTTP layer: no user means a system/worker context and is allowed.
+        if t.privilege and ctx.user is not None and not await user_has_privilege(ctx.user, t.privilege):
+            return ToolResult(
+                ok=False,
+                summary="Not permitted",
+                detail=f"requires the '{t.privilege}' privilege",
+                for_model=(
+                    f"Error: the user does not have the '{t.privilege}' privilege required "
+                    f"to run {name}. Do not retry; tell the user."
+                ),
+            )
         args = _coerce_json_args(args, t.parameters)
         return await t.handler(args, ctx)
     except Exception as exc:  # noqa: BLE001 - surface any tool failure to the model

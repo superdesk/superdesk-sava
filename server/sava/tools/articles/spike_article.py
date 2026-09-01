@@ -6,6 +6,7 @@ from ..base import ToolContext, ToolResult, tool
 @tool(
     name="spike_article",
     domain="articles",
+    privilege="spike",
     description="Spike (soft-delete) an article, removing it from the workflow. Reversible via unspike.",
     parameters={
         "type": "object",
