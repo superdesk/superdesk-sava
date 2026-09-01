@@ -7,6 +7,7 @@ Registered by adding ``MODULES.append("sava")`` in the Superdesk server
 
 from superdesk.core.module import Module
 
+from .conversations import conversations_resource
 from .views import sava_endpoints
 
-module = Module("sava", endpoints=[sava_endpoints])
+module = Module("sava", endpoints=[sava_endpoints], resources=[conversations_resource])

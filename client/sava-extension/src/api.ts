@@ -29,35 +29,87 @@ export interface ISavaPending {
 export interface ISavaDecision {
     id: string;
     approved: boolean;
+    label?: string;
 }
-
-/**
- * Opaque conversation state round-tripped between client and server so the agent
- * remembers prior turns. The client never inspects it — it just stores whatever
- * the server returns and sends it back on the next request.
- */
-export type SavaConversation = Array<unknown>;
 
 /** Response from POST /sava/command. */
 export interface ISavaResult {
     reply: string;
     actions: Array<ISavaAction>;
-    conversation: SavaConversation;
     pending: ISavaPending | null;
+    conversation_id: string | null;
+    title: string | null;
+}
+
+/** Sidebar entry for one of the user's conversations. */
+export interface ISavaConversationSummary {
+    id: string;
+    title: string;
+    created: string | null;
+    updated: string | null;
+    pending: boolean;
+}
+
+/** One rendered turn of a stored conversation. */
+export interface ISavaTurn {
+    role: 'user' | 'assistant';
+    text: string;
+    actions?: Array<ISavaAction>;
+    error?: boolean;
+}
+
+/** A stored conversation, ready to be reopened. */
+export interface ISavaConversationDetail {
+    id: string;
+    title: string;
+    turns: Array<ISavaTurn>;
+    pending: ISavaPending | null;
+    created: string | null;
+    updated: string | null;
 }
 
 /**
  * Send a turn to the SAVA server agent: a new prompt and/or a decision resolving
- * a pending confirmation, along with the prior conversation for context.
+ * a pending confirmation. History lives on the server; pass the conversation id
+ * to continue one, or null to start a new one (the result carries the new id).
  */
 export function sendCommand(
     prompt: string,
-    conversation: SavaConversation,
+    conversationId: string | null,
     decision?: ISavaDecision,
 ): Promise<ISavaResult> {
     return superdeskApi.httpRequestJsonLocal<ISavaResult>({
         method: 'POST',
         path: '/sava/command',
-        payload: {prompt, conversation, decision},
+        payload: {prompt: prompt, conversation_id: conversationId, decision: decision},
+    });
+}
+
+export function listConversations(): Promise<Array<ISavaConversationSummary>> {
+    return superdeskApi.httpRequestJsonLocal<{_items: Array<ISavaConversationSummary>}>({
+        method: 'GET',
+        path: '/sava/conversations',
+    }).then((res) => res._items);
+}
+
+export function getConversation(id: string): Promise<ISavaConversationDetail> {
+    return superdeskApi.httpRequestJsonLocal<ISavaConversationDetail>({
+        method: 'GET',
+        path: '/sava/conversations/' + encodeURIComponent(id),
+    });
+}
+
+export function renameConversation(id: string, title: string): Promise<{id: string; title: string}> {
+    return superdeskApi.httpRequestJsonLocal<{id: string; title: string}>({
+        method: 'PATCH',
+        path: '/sava/conversations/' + encodeURIComponent(id),
+        payload: {title},
+    });
+}
+
+export function deleteConversation(id: string): Promise<void> {
+    return superdeskApi.httpRequestVoidLocal({
+        method: 'DELETE',
+        path: '/sava/conversations/' + encodeURIComponent(id),
     });
 }

@@ -10,10 +10,21 @@ import {
 } from '@chatscope/chat-ui-kit-react';
 
 import {superdeskApi} from './superdeskApi';
-import {sendCommand, ISavaPending, ISavaResult, SavaConversation} from './api';
+import {
+    sendCommand,
+    listConversations,
+    getConversation,
+    renameConversation,
+    deleteConversation,
+    ISavaConversationSummary,
+    ISavaPending,
+    ISavaResult,
+    ISavaTurn,
+} from './api';
 import {IChatMessage, MessageRow} from './MessageRow';
 import {PendingCard} from './PendingCard';
 import {TypingRow} from './TypingRow';
+import {ConversationSidebar} from './ConversationSidebar';
 
 const EXAMPLES: Array<string> = [
     'Show me the articles I have authored',
@@ -21,35 +32,93 @@ const EXAMPLES: Array<string> = [
     'Create a planning item for today about the AI conference and add a text coverage',
 ];
 
+const ACTIVE_KEY = 'sava.activeConversation';
+
+function readActiveId(): string | null {
+    try {
+        return window.localStorage.getItem(ACTIVE_KEY);
+    } catch (_e) {
+        return null;
+    }
+}
+
+function writeActiveId(id: string | null) {
+    try {
+        if (id == null) {
+            window.localStorage.removeItem(ACTIVE_KEY);
+        } else {
+            window.localStorage.setItem(ACTIVE_KEY, id);
+        }
+    } catch (_e) {
+        // storage unavailable: the chat still works, it just won't be restored on reload
+    }
+}
+
 export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void}) {
     const {gettext} = superdeskApi.localization;
     const [messages, setMessages] = React.useState<Array<IChatMessage>>([]);
-    const [conversation, setConversation] = React.useState<SavaConversation>([]);
+    const [conversationId, setConversationId] = React.useState<string | null>(null);
+    const [title, setTitle] = React.useState<string | null>(null);
+    const [conversations, setConversations] = React.useState<Array<ISavaConversationSummary>>([]);
     const [pending, setPending] = React.useState<ISavaPending | null>(null);
     const [loading, setLoading] = React.useState(false);
     const nextId = React.useRef(1);
 
+    function toMessages(turns: Array<ISavaTurn>): Array<IChatMessage> {
+        return turns.map((t) => ({id: nextId.current++, ...t}));
+    }
+
+    function pushAssistant(text: string, extra: Partial<IChatMessage> = {}) {
+        setMessages((prev) => prev.concat({id: nextId.current++, role: 'assistant', text: text, ...extra}));
+    }
+
+    function refreshList() {
+        listConversations().then(setConversations, () => { /* sidebar just stays stale */ });
+    }
+
+    function openConversation(id: string) {
+        setLoading(true);
+        getConversation(id).then((detail) => {
+            setMessages(toMessages(detail.turns));
+            setPending(detail.pending);
+            setConversationId(detail.id);
+            setTitle(detail.title);
+            writeActiveId(detail.id);
+            setLoading(false);
+        }, () => {
+            writeActiveId(null);
+            setLoading(false);
+        });
+    }
+
+    React.useEffect(() => {
+        refreshList();
+        const remembered = readActiveId();
+
+        if (remembered != null) {
+            openConversation(remembered);
+        }
+    }, []);
+
     function applyResult(result: ISavaResult) {
-        setConversation(result.conversation);
         if (result.reply || (result.actions != null && result.actions.length > 0)) {
-            setMessages((prev) => prev.concat({
-                id: nextId.current++,
-                role: 'assistant',
-                text: result.reply,
-                actions: result.actions,
-            }));
+            pushAssistant(result.reply, {actions: result.actions});
         }
         setPending(result.pending);
+        if (result.conversation_id != null) {
+            setConversationId(result.conversation_id);
+            setTitle(result.title);
+            writeActiveId(result.conversation_id);
+            refreshList();
+        }
         setLoading(false);
     }
 
     function applyError(err: any) {
-        setMessages((prev) => prev.concat({
-            id: nextId.current++,
-            role: 'assistant',
-            error: true,
-            text: (err && (err.message || err.error)) || gettext('Something went wrong talking to the agent.'),
-        }));
+        pushAssistant(
+            (err && (err.message || err.error)) || gettext('Something went wrong talking to the agent.'),
+            {error: true},
+        );
         setPending(null);
         setLoading(false);
     }
@@ -64,7 +133,7 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
         setMessages((prev) => prev.concat({id: nextId.current++, role: 'user', text: prompt}));
         setPending(null);
         setLoading(true);
-        sendCommand(prompt, conversation).then(applyResult, applyError);
+        sendCommand(prompt, conversationId).then(applyResult, applyError);
     }
 
     function decide(approved: boolean) {
@@ -73,16 +142,13 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
         }
 
         const p = pending;
+        const label = approved ? p.confirm_label : p.cancel_label;
 
         // Reflect the choice in the thread for continuity.
-        setMessages((prev) => prev.concat({
-            id: nextId.current++,
-            role: 'user',
-            text: approved ? p.confirm_label : p.cancel_label,
-        }));
+        setMessages((prev) => prev.concat({id: nextId.current++, role: 'user', text: label}));
         setPending(null);
         setLoading(true);
-        sendCommand('', conversation, {id: p.id, approved: approved}).then(applyResult, applyError);
+        sendCommand('', conversationId, {id: p.id, approved: approved, label: label}).then(applyResult, applyError);
     }
 
     function resetChat() {
@@ -90,8 +156,28 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
             return;
         }
         setMessages([]);
-        setConversation([]);
         setPending(null);
+        setConversationId(null);
+        setTitle(null);
+        writeActiveId(null);
+    }
+
+    function rename(id: string, newTitle: string) {
+        renameConversation(id, newTitle).then((res) => {
+            setConversations((prev) => prev.map((c) => (c.id === id ? {...c, title: res.title} : c)));
+            if (id === conversationId) {
+                setTitle(res.title);
+            }
+        }, () => refreshList());
+    }
+
+    function remove(id: string) {
+        deleteConversation(id).then(() => {
+            setConversations((prev) => prev.filter((c) => c.id !== id));
+            if (id === conversationId) {
+                resetChat();
+            }
+        }, () => refreshList());
     }
 
     const isEmpty = messages.length === 0 && pending == null && !loading;
@@ -105,23 +191,22 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
 
     return (
         <div className="sava-root">
+            <ConversationSidebar
+                conversations={conversations}
+                activeId={conversationId}
+                busy={loading}
+                onSelect={openConversation}
+                onNew={resetChat}
+                onRename={rename}
+                onDelete={remove}
+            />
             <MainContainer>
                 <ChatContainer>
                     <ConversationHeader>
                         <ConversationHeader.Content
-                            userName="SAVA"
+                            userName={title || 'SAVA'}
                             info={gettext('Ask me to do things in Superdesk')}
                         />
-                        <ConversationHeader.Actions>
-                            <button
-                                className="btn btn--small"
-                                onClick={resetChat}
-                                disabled={loading || messages.length === 0}
-                                title={gettext('Start a new chat')}
-                            >
-                                {gettext('New chat')}
-                            </button>
-                        </ConversationHeader.Actions>
                     </ConversationHeader>
 
                     <MessageList>
