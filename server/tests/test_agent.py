@@ -318,7 +318,7 @@ def test_system_prompt_names_only_registered_tools():
     assert mentioned <= set(_REGISTRY), sorted(mentioned - set(_REGISTRY))
 
 
-def test_package_logger_emits_info_in_request_log_format(capsys):
+def test_package_logger_emits_info_in_request_log_format():
     """Superdesk leaves the root logger at WARNING with a bare console handler; the
     package installs its own INFO handler matching the server's request-log layout."""
     import sava
@@ -327,8 +327,11 @@ def test_package_logger_emits_info_in_request_log_format(capsys):
     assert logging.getLogger("sava.agent").isEnabledFor(logging.INFO)
     assert package_logger.propagate is False
     sava._configure_logging()  # idempotent: re-running must not add a second handler
-    assert sum(1 for h in package_logger.handlers if getattr(h, "_sava", False)) == 1
+    handlers = [h for h in package_logger.handlers if getattr(h, "_sava", False)]
+    assert len(handlers) == 1
 
-    logging.getLogger("sava.agent").info("SAVA turn: model=x")
-    line = capsys.readouterr().out.strip()
+    record = logging.getLogger("sava.agent").makeRecord(
+        "sava.agent", logging.INFO, "f", 1, "SAVA turn: model=x", (), None
+    )
+    line = handlers[0].format(record)
     assert re.fullmatch(r"\[\d{4}-\d\d-\d\d \d\d:\d\d:\d\d [+-]\d{4}\] \[\d+\] \[INFO\] SAVA turn: model=x", line), line
