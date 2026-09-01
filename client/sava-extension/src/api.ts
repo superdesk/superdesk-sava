@@ -178,6 +178,8 @@ export function streamCommand(
         method: 'POST',
         path: '/sava/command/stream',
         payload: {prompt: prompt, conversation_id: conversationId, decision: decision},
+        // unlike httpRequestJsonLocal, the raw helper doesn't declare the body type
+        headers: {'Content-Type': 'application/json'},
         abortSignal: abortSignal,
     }).then((res) => readEventStream(res, onEvent));
 }

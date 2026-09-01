@@ -25,7 +25,7 @@ class ConversationArgs(BaseModel):
 
 async def _payload(request: Request) -> dict:
     try:
-        payload = await request.get_json()
+        payload = await request.get_json(force=True)  # parse even without a JSON content type
     except Exception:  # noqa: BLE001 - a malformed/non-JSON body should not 500
         payload = None
     return payload if isinstance(payload, dict) else {}
