@@ -610,3 +610,43 @@
     opacity: 0.5;
     cursor: default;
 }
+
+/* ---- streaming: stop / retry / stopped note ------------------------- */
+.sava-typing__stop,
+.sava-retry {
+    margin-left: 10px;
+    padding: 3px 10px;
+    border: 1px solid var(--sava-line);
+    border-radius: 12px;
+    background: var(--sava-canvas);
+    color: var(--sava-text);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.sava-typing__stop:hover,
+.sava-retry:hover {
+    border-color: var(--sava-accent);
+    color: var(--sava-accent);
+}
+
+.sava-retry {
+    margin: 8px 0 0;
+}
+
+.sava-note {
+    margin-top: 6px;
+    color: var(--sava-text-muted);
+    font-size: 12px;
+    font-style: italic;
+}
+
+.sava-sidebar__search {
+    margin: 0 12px 8px;
+    padding: 6px 10px;
+    border: 1px solid var(--sava-line);
+    border-radius: 6px;
+    background: var(--sava-canvas);
+    color: var(--sava-text);
+    font-size: 13px;
+}

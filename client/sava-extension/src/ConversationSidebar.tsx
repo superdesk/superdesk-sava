@@ -55,7 +55,12 @@ export function ConversationSidebar(props: IProps) {
     const {gettext} = superdeskApi.localization;
     const [editingId, setEditingId] = React.useState<string | null>(null);
     const [draft, setDraft] = React.useState('');
-    const groups = groupByDay(props.conversations, new Date(), gettext);
+    const [query, setQuery] = React.useState('');
+    const needle = query.trim().toLowerCase();
+    const visible = needle.length === 0
+        ? props.conversations
+        : props.conversations.filter((c) => c.title.toLowerCase().indexOf(needle) >= 0);
+    const groups = groupByDay(visible, new Date(), gettext);
 
     function startRename(c: ISavaConversationSummary) {
         setEditingId(c.id);
@@ -101,9 +106,21 @@ export function ConversationSidebar(props: IProps) {
                 <i className="icon-plus-sign" /> {gettext('New chat')}
             </button>
 
+            {props.conversations.length > 0 && (
+                <input
+                    className="sava-sidebar__search"
+                    type="search"
+                    placeholder={gettext('Search chats…')}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                />
+            )}
+
             <div className="sava-sidebar__list">
                 {groups.length === 0 && (
-                    <div className="sava-sidebar__empty">{gettext('Your chats will appear here.')}</div>
+                    <div className="sava-sidebar__empty">
+                        {needle.length > 0 ? gettext('No chats match.') : gettext('Your chats will appear here.')}
+                    </div>
                 )}
                 {groups.map((group) => (
                     <div className="sava-sidebar__group" key={group.label}>

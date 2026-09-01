@@ -84,6 +84,16 @@ then a small model call replaces that with a short title (best effort). Because
 this is a new resource, run the usual `python manage.py app:initialize_data` once
 after installing so its Mongo index is created.
 
+### Streaming
+
+The canvas talks to `POST /sava/command/stream`, which returns server-sent
+events: `status` and `tool_start` (progress), `action` (a finished tool call),
+`delta` (reply text as it arrives), `discard` (drop narration that preceded a
+tool call), then `done` with the same body `POST /sava/command` returns. Closing
+the connection (the Stop button) cancels the turn server-side: the agent keeps
+whatever reply text arrived, closes any half-run tool call in the history, and
+saves the turn. `POST /sava/command` remains for non-streaming clients.
+
 ### Human-in-the-loop
 
 Tools flagged `requires_confirmation=True` (e.g. publish) don't run immediately:

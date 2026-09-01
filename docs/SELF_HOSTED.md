@@ -163,6 +163,12 @@ below are **illustrative** — measure on your own hardware.
   bigger/faster host is the direct lever. (Sending fewer tools per call is a
   possible future optimization, but it's a general cost/reliability feature, not a
   requirement.)
+- **Streaming.** SAVA streams model output (``stream: true`` with
+  ``stream_options.include_usage``) so replies appear as they are generated.
+  Make sure your runtime supports streaming *with tool calls*; older Ollama
+  releases only returned tool calls in non-streaming mode. Runtimes that don't
+  understand ``stream_options`` generally ignore it; if one rejects it, the turn
+  fails with a clear model error rather than hanging.
 - **Host request timeout.** The Superdesk server may cap request duration. A slow
   first (cold) call can exceed the default, surfacing to the browser as a network
   reset. Raise it if needed — for the bundled hypercorn config, set `WEB_TIMEOUT`

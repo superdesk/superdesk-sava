@@ -9,10 +9,20 @@ export interface IChatMessage {
     text: string;
     actions?: Array<ISavaAction>;
     error?: boolean;
+    /** The user stopped the turn before it finished. */
+    stopped?: boolean;
+}
+
+interface IProps {
+    message: IChatMessage;
+    /** Offered on error rows: re-send the prompt that failed. */
+    onRetry?: () => void;
+    retryLabel?: string;
+    stoppedLabel?: string;
 }
 
 /** One message in the thread: a user bubble, or an assistant bubble with its activity log. */
-export function MessageRow({message}: {message: IChatMessage}) {
+export function MessageRow({message, onRetry, retryLabel, stoppedLabel}: IProps) {
     if (message.role === 'user') {
         return (
             <div className="sava-row sava-row--user">
@@ -38,6 +48,10 @@ export function MessageRow({message}: {message: IChatMessage}) {
                 {body}
                 {message.actions != null && message.actions.length > 0 && (
                     <ActivityLog actions={message.actions} />
+                )}
+                {message.stopped && <div className="sava-note">{stoppedLabel}</div>}
+                {message.error && onRetry != null && (
+                    <button className="sava-retry" onClick={onRetry}>{retryLabel}</button>
                 )}
             </div>
         </div>

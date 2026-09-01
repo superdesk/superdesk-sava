@@ -113,3 +113,71 @@ export function deleteConversation(id: string): Promise<void> {
         path: '/sava/conversations/' + encodeURIComponent(id),
     });
 }
+
+/** One server-sent event from POST /sava/command/stream. */
+export interface ISavaStreamEvent extends Partial<ISavaResult> {
+    type: 'status' | 'tool_start' | 'action' | 'delta' | 'discard' | 'done' | 'error';
+    text?: string;
+    tool?: string;
+    action?: ISavaAction;
+    status?: number;
+}
+
+function readEventStream(res: Response, onEvent: (event: ISavaStreamEvent) => void): Promise<void> {
+    if (res.body == null) {
+        return Promise.reject(new Error('Streaming is not supported by this browser.'));
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    function dispatch(block: string) {
+        block.split('\n').forEach((line) => {
+            if (line.indexOf('data: ') === 0) {
+                onEvent(JSON.parse(line.slice(6)));
+            }
+        });
+    }
+
+    function pump(): Promise<void> {
+        return reader.read().then(({done, value}) => {
+            if (done) {
+                return;
+            }
+            buffer += decoder.decode(value, {stream: true});
+
+            let separator = buffer.indexOf('\n\n');
+
+            while (separator >= 0) {
+                dispatch(buffer.slice(0, separator));
+                buffer = buffer.slice(separator + 2);
+                separator = buffer.indexOf('\n\n');
+            }
+
+            return pump();
+        });
+    }
+
+    return pump();
+}
+
+/**
+ * Streaming variant of sendCommand: progress and reply text arrive as events,
+ * ending with a `done` event carrying the same body sendCommand returns.
+ * Aborting the signal stops the turn server-side as well.
+ */
+export function streamCommand(
+    prompt: string,
+    conversationId: string | null,
+    decision: ISavaDecision | undefined,
+    onEvent: (event: ISavaStreamEvent) => void,
+    abortSignal: AbortSignal,
+): Promise<void> {
+    return superdeskApi.httpRequestRawLocal<ISavaStreamEvent>({
+        method: 'POST',
+        path: '/sava/command/stream',
+        payload: {prompt: prompt, conversation_id: conversationId, decision: decision},
+        abortSignal: abortSignal,
+    }).then((res) => readEventStream(res, onEvent));
+}

@@ -9,11 +9,12 @@ publish) can pause: when the model calls such a tool, the loop returns a
 card; the user's decision comes back on the next request and the loop resumes.
 """
 
+import asyncio
 import json
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple
 
 from .default_settings import get_setting, get_int_setting
 from .tools import Tool, ToolContext, ToolLink, get_openai_tools, get_tool, run_tool
@@ -243,12 +244,21 @@ def _build_pending(tc_id: str, t: Tool, args: Dict[str, Any], ctx: ToolContext) 
     }
 
 
+EventHandler = Callable[[Dict[str, Any]], Awaitable[None]]
+
+
+async def _emit(on_event: Optional[EventHandler], event: Dict[str, Any]) -> None:
+    if on_event is not None:
+        await on_event(event)
+
+
 async def _resolve_tool_calls(
     messages: List[Dict[str, Any]],
     actions: List[Dict[str, Any]],
     ctx: ToolContext,
     approved: Set[str],
     denied: Set[str],
+    on_event: Optional[EventHandler] = None,
 ) -> Optional[Dict[str, Any]]:
     """Execute any unresolved tool_calls on the trailing assistant message.
 
@@ -277,11 +287,14 @@ async def _resolve_tool_calls(
                 }
             )
             actions.append({"tool": name, "ok": False, "summary": "Cancelled by user", "detail": None, "links": []})
+            await _emit(on_event, {"type": "action", "action": actions[-1]})
             continue
 
+        await _emit(on_event, {"type": "tool_start", "tool": name})
         result = await run_tool(name, args, ctx)
         messages.append({"role": "tool", "tool_call_id": tc_id, "content": result.for_model})
         actions.append(result.action_dict(name))
+        await _emit(on_event, {"type": "action", "action": actions[-1]})
 
     return None
 
@@ -293,15 +306,85 @@ def _add_usage(total: Dict[str, int], usage: Any) -> None:
             total[key] += value
 
 
+def _tool_call_dict(tc: Any) -> Dict[str, Any]:
+    return {"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+
+
+async def _complete(
+    client: Any,
+    model: str,
+    messages: List[Dict[str, Any]],
+    on_event: Optional[EventHandler],
+    partial: List[str],
+) -> Tuple[str, List[Dict[str, Any]], Any]:
+    """One model call. Returns ``(content, tool_calls, usage)`` with tool calls in
+    the plain dict shape the history stores.
+
+    With an event handler the call is streamed: content chunks are appended to
+    ``partial`` (so a stopped turn can keep what arrived) and emitted as ``delta``
+    events, while tool-call fragments are reassembled by index.
+    """
+    common = {
+        "model": model,
+        "messages": messages,
+        "tools": get_openai_tools(),
+        "tool_choice": "auto",
+        "temperature": 0,
+    }
+    if on_event is None:
+        response = await client.chat.completions.create(**common)
+        message = response.choices[0].message
+        calls = [_tool_call_dict(tc) for tc in (message.tool_calls or [])]
+        return message.content or "", calls, getattr(response, "usage", None)
+
+    stream = await client.chat.completions.create(**common, stream=True, stream_options={"include_usage": True})
+    slots: Dict[int, Dict[str, Any]] = {}
+    usage = None
+    async for chunk in stream:
+        if getattr(chunk, "usage", None):
+            usage = chunk.usage
+        if not chunk.choices:
+            continue
+        delta = chunk.choices[0].delta
+        if delta is None:
+            continue
+        if delta.content:
+            partial.append(delta.content)
+            await on_event({"type": "delta", "text": delta.content})
+        for fragment in delta.tool_calls or []:
+            slot = slots.setdefault(
+                fragment.index, {"id": "", "type": "function", "function": {"name": "", "arguments": ""}}
+            )
+            if fragment.id:
+                slot["id"] = fragment.id
+            fn = getattr(fragment, "function", None)
+            if fn is not None:
+                if fn.name:
+                    slot["function"]["name"] = fn.name
+                if fn.arguments:
+                    slot["function"]["arguments"] += fn.arguments
+    ordered = [slots[i] for i in sorted(slots)]
+    for n, call in enumerate(ordered):
+        call["id"] = call["id"] or f"call_{n}"
+    return "".join(partial), ordered, usage
+
+
 async def run_agent(
     prompt: str,
     user: Optional[Dict[str, Any]],
     history: Optional[List[Dict[str, Any]]] = None,
     decision: Optional[Dict[str, Any]] = None,
+    on_event: Optional[EventHandler] = None,
 ) -> Dict[str, Any]:
     """Run one turn. Returns
     ``{"reply", "actions", "conversation", "pending"}`` where ``pending`` is a
-    confirmation card the client must resolve (or None)."""
+    confirmation card the client must resolve (or None).
+
+    With ``on_event`` the turn streams progress (``status``, ``tool_start``,
+    ``action``, ``delta``, ``discard``) and the model is called in streaming mode.
+    If the task is cancelled mid-turn (the client pressed Stop / disconnected),
+    the history is left well-formed and whatever reply text arrived is kept.
+    """
     prior = _sanitize_history(history)
     ctx = ToolContext(user=user)
     model = get_setting("SAVA_MODEL")
@@ -349,54 +432,51 @@ async def run_agent(
         _close_dangling_tool_calls(messages, actions, "the user sent a new message instead of a decision")
         messages.append({"role": "user", "content": f"{_date_context()}\n\n{prompt}"})
 
-    for _ in range(max_steps):
-        # 1. Resolve any pending tool_calls on the trailing assistant message
-        #    (handles both fresh turns and resumes after an approval).
-        pending = await _resolve_tool_calls(messages, actions, ctx, approved, denied)
-        if pending is not None:
-            return finish("", messages[1:], pending=pending, outcome="pending")
+    partial: List[str] = []
+    try:
+        for _ in range(max_steps):
+            # 1. Resolve any pending tool_calls on the trailing assistant message
+            #    (handles both fresh turns and resumes after an approval).
+            pending = await _resolve_tool_calls(messages, actions, ctx, approved, denied, on_event)
+            if pending is not None:
+                return finish("", messages[1:], pending=pending, outcome="pending")
 
-        # 2. Ask the model what to do next.
-        steps += 1
-        try:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=messages,
-                tools=get_openai_tools(),
-                tool_choice="auto",
-                temperature=0,
-            )
-        except Exception as exc:  # noqa: BLE001 - report model/transport failures
-            logger.exception("SAVA model call failed")
-            return finish(f"The AI request failed: {exc}", messages[1:], outcome="model_error")
+            # 2. Ask the model what to do next.
+            steps += 1
+            partial = []
+            await _emit(on_event, {"type": "status", "text": "Thinking…"})
+            try:
+                content, tool_calls, step_usage = await _complete(client, model, messages, on_event, partial)
+            except Exception as exc:  # noqa: BLE001 - report model/transport failures
+                logger.exception("SAVA model call failed")
+                return finish(f"The AI request failed: {exc}", messages[1:], outcome="model_error")
 
-        _add_usage(usage, getattr(response, "usage", None))
-        message = response.choices[0].message
-        tool_calls = message.tool_calls or []
+            _add_usage(usage, step_usage)
 
-        if not tool_calls:
-            reply = _clean_reply(message.content or "") or "Done."
-            messages.append({"role": "assistant", "content": reply})
-            return finish(reply, messages[1:])
+            if not tool_calls:
+                reply = _clean_reply(content) or "Done."
+                messages.append({"role": "assistant", "content": reply})
+                return finish(reply, messages[1:])
 
-        # Append the assistant's tool-call message; the loop resolves it on the
-        # next iteration (step 1).
-        messages.append(
-            {
-                "role": "assistant",
-                "content": message.content or "",
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                    }
-                    for tc in tool_calls
-                ],
-            }
+            # Any text alongside tool calls is narration, not the reply: tell a
+            # streaming client to drop what it showed, and don't keep it for Stop.
+            if content:
+                await _emit(on_event, {"type": "discard"})
+            partial = []
+
+            # Append the assistant's tool-call message; the loop resolves it on the
+            # next iteration (step 1).
+            messages.append({"role": "assistant", "content": content, "tool_calls": tool_calls})
+
+        _close_dangling_tool_calls(messages, actions, "step limit reached")
+        return finish(
+            "I reached the step limit before fully finishing. Here is what I did.", messages[1:], outcome="step_limit"
         )
-
-    _close_dangling_tool_calls(messages, actions, "step limit reached")
-    return finish(
-        "I reached the step limit before fully finishing. Here is what I did.", messages[1:], outcome="step_limit"
-    )
+    except asyncio.CancelledError:
+        # Stopped by the user (the streaming client went away). Keep the history
+        # well-formed and whatever reply text had arrived; the caller persists it.
+        _close_dangling_tool_calls(messages, actions, "stopped by the user")
+        reply = _clean_reply("".join(partial))
+        if reply:
+            messages.append({"role": "assistant", "content": reply})
+        return finish(reply, messages[1:], outcome="stopped")

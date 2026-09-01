@@ -11,7 +11,7 @@ import {
 
 import {superdeskApi} from './superdeskApi';
 import {
-    sendCommand,
+    streamCommand,
     listConversations,
     getConversation,
     renameConversation,
@@ -19,7 +19,10 @@ import {
     ISavaConversationSummary,
     ISavaPending,
     ISavaResult,
+    ISavaStreamEvent,
     ISavaTurn,
+    ISavaAction,
+    ISavaDecision,
 } from './api';
 import {IChatMessage, MessageRow} from './MessageRow';
 import {PendingCard} from './PendingCard';
@@ -54,9 +57,18 @@ function writeActiveId(id: string | null) {
     }
 }
 
+interface IDraft {
+    text: string;
+    actions: Array<ISavaAction>;
+}
+
 export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void}) {
     const {gettext} = superdeskApi.localization;
     const [messages, setMessages] = React.useState<Array<IChatMessage>>([]);
+    const [draft, setDraft] = React.useState<IDraft | null>(null);
+    const [status, setStatus] = React.useState<string>('');
+    const [lastPrompt, setLastPrompt] = React.useState<string | null>(null);
+    const abortRef = React.useRef<AbortController | null>(null);
     const [conversationId, setConversationId] = React.useState<string | null>(null);
     const [title, setTitle] = React.useState<string | null>(null);
     const [conversations, setConversations] = React.useState<Array<ISavaConversationSummary>>([]);
@@ -101,6 +113,7 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
     }, []);
 
     function applyResult(result: ISavaResult) {
+        setDraft(null);
         if (result.reply || (result.actions != null && result.actions.length > 0)) {
             pushAssistant(result.reply, {actions: result.actions});
         }
@@ -115,12 +128,77 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
     }
 
     function applyError(err: any) {
+        setDraft(null);
         pushAssistant(
-            (err && (err.message || err.error)) || gettext('Something went wrong talking to the agent.'),
+            (err && (err.reply || err.message || err.error)) || gettext('Something went wrong talking to the agent.'),
             {error: true},
         );
         setPending(null);
         setLoading(false);
+    }
+
+    /** The user pressed Stop: keep what streamed in, mark it, and let the sidebar catch up. */
+    function applyStopped() {
+        setDraft((d) => {
+            if (d != null && (d.text.length > 0 || d.actions.length > 0)) {
+                pushAssistant(d.text, {actions: d.actions, stopped: true});
+            }
+            return null;
+        });
+        setLoading(false);
+        refreshList();
+    }
+
+    function onEvent(event: ISavaStreamEvent) {
+        switch (event.type) {
+        case 'status':
+            setStatus(event.text || '');
+            break;
+        case 'tool_start':
+            setStatus(gettext('Running {{tool}}…', {tool: event.tool || ''}));
+            break;
+        case 'action':
+            setDraft((d) => ({
+                text: d != null ? d.text : '',
+                actions: (d != null ? d.actions : []).concat(event.action!),
+            }));
+            break;
+        case 'delta':
+            setDraft((d) => ({
+                text: (d != null ? d.text : '') + (event.text || ''),
+                actions: d != null ? d.actions : [],
+            }));
+            break;
+        case 'discard':
+            setDraft((d) => ({text: '', actions: d != null ? d.actions : []}));
+            break;
+        case 'done':
+            applyResult(event as ISavaResult);
+            break;
+        case 'error':
+            applyError(event);
+            break;
+        }
+    }
+
+    function runTurn(prompt: string, decision?: ISavaDecision) {
+        const controller = new AbortController();
+
+        abortRef.current = controller;
+        setPending(null);
+        setLoading(true);
+        setDraft({text: '', actions: []});
+        setStatus(gettext('Thinking…'));
+        streamCommand(prompt, conversationId, decision, onEvent, controller.signal).then(
+            () => setLoading(false),
+            (err) => (controller.signal.aborted ? applyStopped() : applyError(err)),
+        );
+    }
+
+    function stop() {
+        if (abortRef.current != null) {
+            abortRef.current.abort();
+        }
     }
 
     function submit(raw: string) {
@@ -131,9 +209,17 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
         }
 
         setMessages((prev) => prev.concat({id: nextId.current++, role: 'user', text: prompt}));
-        setPending(null);
-        setLoading(true);
-        sendCommand(prompt, conversationId).then(applyResult, applyError);
+        setLastPrompt(prompt);
+        runTurn(prompt);
+    }
+
+    /** Re-send the last prompt after a failure, dropping the error row. */
+    function retry() {
+        if (lastPrompt == null || loading) {
+            return;
+        }
+        setMessages((prev) => prev.filter((m) => !m.error));
+        runTurn(lastPrompt);
     }
 
     function decide(approved: boolean) {
@@ -146,9 +232,7 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
 
         // Reflect the choice in the thread for continuity.
         setMessages((prev) => prev.concat({id: nextId.current++, role: 'user', text: label}));
-        setPending(null);
-        setLoading(true);
-        sendCommand('', conversationId, {id: p.id, approved: approved, label: label}).then(applyResult, applyError);
+        runTurn('', {id: p.id, approved: approved, label: label});
     }
 
     function resetChat() {
@@ -156,6 +240,7 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
             return;
         }
         setMessages([]);
+        setDraft(null);
         setPending(null);
         setConversationId(null);
         setTitle(null);
@@ -180,14 +265,36 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
         }, () => refreshList());
     }
 
-    const isEmpty = messages.length === 0 && pending == null && !loading;
-    const rows: Array<React.ReactNode> = messages.map((m) => <MessageRow key={m.id} message={m} />);
+    function buildRows(): Array<React.ReactNode> {
+        const rows: Array<React.ReactNode> = messages.map((m) => (
+            <MessageRow
+                key={m.id}
+                message={m}
+                onRetry={m.error && lastPrompt != null ? retry : undefined}
+                retryLabel={gettext('Retry')}
+                stoppedLabel={gettext('Stopped')}
+            />
+        ));
 
-    if (loading) {
-        rows.push(<TypingRow key="typing" label={gettext('SAVA is working…')} />);
-    } else if (pending != null) {
-        rows.push(<PendingCard key="pending" pending={pending} onDecide={decide} />);
+        if (draft != null && (draft.text.length > 0 || draft.actions.length > 0)) {
+            rows.push(
+                <MessageRow
+                    key="draft"
+                    message={{id: -1, role: 'assistant', text: draft.text, actions: draft.actions}}
+                />,
+            );
+        }
+
+        if (loading) {
+            rows.push(<TypingRow key="typing" label={status} stopLabel={gettext('Stop')} onStop={stop} />);
+        } else if (pending != null) {
+            rows.push(<PendingCard key="pending" pending={pending} onDecide={decide} />);
+        }
+
+        return rows;
     }
+
+    const isEmpty = messages.length === 0 && pending == null && !loading;
 
     return (
         <div className="sava-root">
@@ -225,7 +332,7 @@ export function SavaApp(_props: {setupFullWidthCapability: (config: any) => void
                                     ))}
                                 </div>
                             </div>
-                        ) : rows}
+                        ) : buildRows()}
                     </MessageList>
 
                     <MessageInput
