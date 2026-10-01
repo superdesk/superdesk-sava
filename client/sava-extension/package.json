@@ -11,7 +11,7 @@
     "devDependencies": {
         "@types/react": "16.9.44",
         "@typescript-eslint/parser": "5.57.0",
-        "eslint": "6.6.0",
+        "eslint": "10.11.0",
         "superdesk-code-style": "1.3.0",
         "typescript": "~4.9.5"
     },
