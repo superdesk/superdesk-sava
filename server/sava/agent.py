@@ -372,6 +372,7 @@ async def run_agent(
     conversation_id: Optional[str] = None,
     token: Optional[str] = None,
     pending: Optional[Dict[str, Any]] = None,
+    session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run one turn as the user whose Superdesk session ``token`` is given. Returns
     ``{"reply", "actions", "conversation", "pending"}`` where ``pending`` is a
@@ -429,7 +430,10 @@ async def run_agent(
         _close_dangling_tool_calls(messages, actions, "the user sent a new message instead of a decision")
         messages.append({"role": "user", "content": f"{_date_context()}\n\n{prompt}"})
 
-    async with shared_tools.toolbox(token, model=model, conversation_id=conversation_id) as toolbox:
+    user_id = str(user["_id"]) if user and user.get("_id") else None
+    async with shared_tools.toolbox(
+        token, session_id=session_id, user_id=user_id, model=model, conversation_id=conversation_id
+    ) as toolbox:
         return await _loop(
             client,
             model,

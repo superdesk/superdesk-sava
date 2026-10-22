@@ -147,3 +147,21 @@ def test_the_session_token_is_read_as_superdesk_reads_it(header, token):
 def test_without_a_header_the_session_cookie_is_used():
     request = SimpleNamespace(get_header=lambda name: None, storage=SimpleNamespace(session={"session_token": "s1"}))
     assert views._session_token(request) == "s1"
+
+
+def test_the_session_comes_from_superdesks_auth_record_when_it_has_one():
+    """With the session id the tools know whose session it is: whoami and the user's own items need it."""
+    auth = {"_id": "session-1", "token": "abc123", "user": "u1"}
+    request = SimpleNamespace(
+        storage=SimpleNamespace(request={"auth": auth}, session={}), get_header=lambda name: "Bearer other"
+    )
+    assert views._session(request) == ("abc123", "session-1")
+
+    bare = SimpleNamespace(storage=SimpleNamespace(request={}, session={}), get_header=lambda name: "Bearer abc123")
+    assert views._session(bare) == ("abc123", None)
+
+
+async def test_the_client_knows_the_session_and_the_user():
+    async with shared_tools.toolbox("token", session_id="session-1", user_id="u1") as tools:
+        client = tools._client
+        assert (await client.session_id(), await client.user_id()) == ("session-1", "u1")

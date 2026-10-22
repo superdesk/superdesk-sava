@@ -210,11 +210,22 @@ def _counted(name: str, data: Dict[str, Any]) -> str:
 
 @asynccontextmanager
 async def toolbox(
-    token: Optional[str], *, model: Optional[str] = None, conversation_id: Optional[str] = None
+    token: Optional[str],
+    *,
+    session_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+    model: Optional[str] = None,
+    conversation_id: Optional[str] = None,
 ) -> AsyncIterator[Toolbox]:
-    """The tools for one turn, signed in with the user's Superdesk session ``token``."""
+    """The tools for one turn, signed in with the user's Superdesk session ``token``.
+
+    ``session_id`` and ``user_id`` say whose session it is; without them, tools that need to know who acts
+    (whoami, the user's own desks and items) cannot work, since a bare token does not tell.
+    """
     if not token:
         yield Toolbox(None, model, conversation_id)
         return
     async with aiohttp.ClientSession() as session:
-        yield Toolbox(SuperdeskClient(session, api_url(), Credentials(token=token)), model, conversation_id)
+        credentials = Credentials(token=token, session_id=session_id)
+        client = SuperdeskClient(session, api_url(), credentials, user_id=user_id)
+        yield Toolbox(client, model, conversation_id)

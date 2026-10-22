@@ -39,8 +39,22 @@ def _decision_label(decision: dict) -> str:
     return "Confirmed" if decision.get("approved") else "Cancelled"
 
 
+def _session(request: Request) -> Tuple[Optional[str], Optional[str]]:
+    """The Superdesk session the request came with, as ``(token, session id)``; the tools act with it.
+
+    Superdesk keeps the session's auth record on the request once it has checked it; the header is the fallback.
+    """
+    try:
+        auth = request.storage.request.get("auth") or {}
+    except Exception:  # noqa: BLE001 - no request storage
+        auth = {}
+    if auth.get("token"):
+        return str(auth["token"]), str(auth["_id"]) if auth.get("_id") else None
+    return _session_token(request), None
+
+
 def _session_token(request: Request) -> Optional[str]:
-    """The Superdesk session the request came with, read as Superdesk itself reads it; the tools act with it."""
+    """The session token from the request, read as Superdesk itself reads it."""
     header = (request.get_header("Authorization") or "").strip()
     if header.lower().startswith(("token", "bearer", "basic")):
         header = header.split(" ")[1] if " " in header else ""
@@ -56,7 +70,10 @@ def _session_token(request: Request) -> Optional[str]:
 
 
 async def _run_turn(
-    user: dict, payload: dict, on_event: Optional[EventHandler] = None, token: Optional[str] = None
+    user: dict,
+    payload: dict,
+    on_event: Optional[EventHandler] = None,
+    session: Tuple[Optional[str], Optional[str]] = (None, None),
 ) -> Tuple[Dict[str, Any], int]:
     """Run one turn for ``user`` and persist it. Returns ``(body, status)``.
 
@@ -91,8 +108,9 @@ async def _run_turn(
             decision,
             on_event,
             conversation_id=str(conv.id) if conv else None,
-            token=token,
+            token=session[0],
             pending=conv.pending if conv and decision else None,
+            session_id=session[1],
         )
     except Exception:  # noqa: BLE001 - never leak a raw traceback to the canvas
         logger.exception("SAVA command failed")
@@ -141,7 +159,7 @@ async def sava_command(request: Request) -> Response:
     History lives server-side, scoped to the logged-in user: the first turn creates
     the conversation (and gives it a title), later turns continue it by id.
     """
-    body, status = await _run_turn(request.user, await _payload(request), token=_session_token(request))
+    body, status = await _run_turn(request.user, await _payload(request), session=_session(request))
     return Response(body, status)
 
 
@@ -156,7 +174,7 @@ async def sava_command_stream(request: Request):
     """
     payload = await _payload(request)
     user = request.user
-    token = _session_token(request)
+    session = _session(request)
     queue: "asyncio.Queue[Optional[Dict[str, Any]]]" = asyncio.Queue()
 
     async def emit(event: Dict[str, Any]) -> None:
@@ -164,7 +182,7 @@ async def sava_command_stream(request: Request):
 
     async def work() -> None:
         try:
-            body, status = await _run_turn(user, payload, emit, token)
+            body, status = await _run_turn(user, payload, emit, session)
             await queue.put({"type": "done" if status == 200 else "error", "status": status, **body})
         except Exception:  # noqa: BLE001 - never leak a raw traceback to the canvas
             logger.exception("SAVA streamed command failed")
