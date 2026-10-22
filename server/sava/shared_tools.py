@@ -110,7 +110,7 @@ class Toolbox:
         data = result.model_dump(mode="json") if isinstance(result, BaseModel) else result
         if not isinstance(data, dict):
             data = {"result": data}
-        warnings = [str(warning) for warning in data.get("warnings") or []]
+        warnings = [str(warning) for warning in (data.get("warnings") or []) + (data.get("problems") or [])]
         return ToolResult(
             ok=True,
             summary=str(data.get("summary") or _described(name, data)),
@@ -209,6 +209,10 @@ def _described(name: str, data: Dict[str, Any]) -> str:
     """A line for the activity log when the result has no summary of its own: what was found, or who."""
     if name == "whoami" and (data.get("display_name") or data.get("username")):
         return f"Signed in as {data.get('display_name') or data.get('username')}"
+    if isinstance(data.get("ready"), bool) and data.get("action"):  # a check before publishing, correcting...
+        if data["ready"]:
+            return f"Ready to {data['action']}"
+        return f"Not ready to {data['action']}: {len(data.get('problems') or [])} problem(s)"
     if not data.get("id"):  # a single item has lists of its own (calendars, coverages...): not what was found
         for key, value in data.items():
             if isinstance(value, list):
