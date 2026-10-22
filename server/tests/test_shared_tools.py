@@ -174,6 +174,7 @@ async def test_the_client_knows_the_session_and_the_user():
         ("list_desks", {"desks": [{}, {}, {}]}, "Found 3 desks"),
         ("search_events_and_planning", {"entries": [{}], "page": 1}, "Found 1 events and planning items"),
         ("get_vocabulary", {"id": "x"}, "Get vocabulary"),
+        ("get_planning_item", {"id": "pl1", "calendars": [], "coverages": [{}]}, "Get planning item"),
     ],
 )
 def test_the_activity_log_says_what_was_found(name, data, line):

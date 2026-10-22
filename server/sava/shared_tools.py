@@ -209,9 +209,10 @@ def _described(name: str, data: Dict[str, Any]) -> str:
     """A line for the activity log when the result has no summary of its own: what was found, or who."""
     if name == "whoami" and (data.get("display_name") or data.get("username")):
         return f"Signed in as {data.get('display_name') or data.get('username')}"
-    for key, value in data.items():
-        if isinstance(value, list):
-            return f"Found {len(value)} {LIST_NAMES.get(key, key.replace('_', ' '))}"
+    if not data.get("id"):  # a single item has lists of its own (calendars, coverages...): not what was found
+        for key, value in data.items():
+            if isinstance(value, list):
+                return f"Found {len(value)} {LIST_NAMES.get(key, key.replace('_', ' '))}"
     return name.replace("_", " ").capitalize()
 
 
