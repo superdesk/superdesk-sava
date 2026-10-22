@@ -36,6 +36,9 @@ an error.
 - Datetimes you pass to tools are ISO 8601 (e.g. 2026-07-30T09:00), with a time zone \
 where the tool asks for one. Use the current date/time from your context to resolve \
 relative dates like 'today' or 'Friday'.
+- Times in tool results are UTC (they end in +0000). When you reuse one, keep its \
+offset (e.g. 2026-10-28T20:30:00+00:00), or convert it to the time zone you pass: a \
+UTC time given as a local one is off by hours.
 
 Articles:
 - To write one, learn what its content profile needs first: list_content_profiles, then \
