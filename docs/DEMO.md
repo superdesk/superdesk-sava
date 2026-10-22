@@ -20,18 +20,18 @@ Each step: **type this** → *what fires* → **point this out**.
 
 ### 1. Read — "what have I written?"
 **Type:** `Show me the articles I have authored`
-*Fires:* `find_my_articles`
+*Fires:* `list_my_open_items`
 **Point out:** plain English → a real federated search, results as cards with
 "open" deep links. This is the whole thesis in one line.
 
 ### 2. Desk awareness
 **Type:** `What's on the Default Desk right now?`
-*Fires:* `find_desk_items`
+*Fires:* `list_desk_queue`
 **Point out:** it resolved the desk by **name** — no ids, no menus.
 
 ### 3. Create + human-in-the-loop publish (the flagship)
 **Type:** `Create a text article headlined "SAVA goes live" with a short body, then publish it`
-*Fires:* `list_content_profiles` / `describe_content_profile` → `create_article`
+*Fires:* `list_content_profiles` / `get_content_profile` → `create_article`
 → **publish pauses** with an approval card.
 **Point out:**
 - It discovered the *Text* profile's required fields **at runtime** — nothing
@@ -59,7 +59,7 @@ current-date context injected into the prompt.
 ### 6. Multi-turn memory
 **Type (follow-up, no ids):** `Spike the first one`
 *Fires:* resolves "the first one" from the earlier result in the same
-conversation → `spike_article`, which is also gated, so a second approval card
+conversation → `spike_item`, which is also gated, so a second approval card
 appears.
 **Point out:** two things at once — it **remembered** the earlier result (the
 server is stateless; the client round-trips the conversation), and spiking is

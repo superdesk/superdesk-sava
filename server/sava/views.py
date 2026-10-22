@@ -1,6 +1,7 @@
 """SAVA HTTP endpoints (new async superdesk.core.web framework)."""
 
 import asyncio
+import base64
 import json
 import logging
 from typing import Any, Dict, Optional, Tuple
@@ -38,7 +39,25 @@ def _decision_label(decision: dict) -> str:
     return "Confirmed" if decision.get("approved") else "Cancelled"
 
 
-async def _run_turn(user: dict, payload: dict, on_event: Optional[EventHandler] = None) -> Tuple[Dict[str, Any], int]:
+def _session_token(request: Request) -> Optional[str]:
+    """The Superdesk session the request came with, read as Superdesk itself reads it; the tools act with it."""
+    header = (request.get_header("Authorization") or "").strip()
+    if header.lower().startswith(("token", "bearer", "basic")):
+        header = header.split(" ")[1] if " " in header else ""
+    if header:
+        try:
+            return base64.b64decode(header).decode().partition(":")[0] or header
+        except Exception:  # noqa: BLE001 - not base64: the token itself
+            return header
+    try:
+        return request.storage.session.get("session_token") or None
+    except Exception:  # noqa: BLE001 - no session storage
+        return None
+
+
+async def _run_turn(
+    user: dict, payload: dict, on_event: Optional[EventHandler] = None, token: Optional[str] = None
+) -> Tuple[Dict[str, Any], int]:
     """Run one turn for ``user`` and persist it. Returns ``(body, status)``.
 
     Shared by the JSON endpoint and the streaming one; ``on_event`` receives the
@@ -72,6 +91,8 @@ async def _run_turn(user: dict, payload: dict, on_event: Optional[EventHandler] 
             decision,
             on_event,
             conversation_id=str(conv.id) if conv else None,
+            token=token,
+            pending=conv.pending if conv and decision else None,
         )
     except Exception:  # noqa: BLE001 - never leak a raw traceback to the canvas
         logger.exception("SAVA command failed")
@@ -120,7 +141,7 @@ async def sava_command(request: Request) -> Response:
     History lives server-side, scoped to the logged-in user: the first turn creates
     the conversation (and gives it a title), later turns continue it by id.
     """
-    body, status = await _run_turn(request.user, await _payload(request))
+    body, status = await _run_turn(request.user, await _payload(request), token=_session_token(request))
     return Response(body, status)
 
 
@@ -135,6 +156,7 @@ async def sava_command_stream(request: Request):
     """
     payload = await _payload(request)
     user = request.user
+    token = _session_token(request)
     queue: "asyncio.Queue[Optional[Dict[str, Any]]]" = asyncio.Queue()
 
     async def emit(event: Dict[str, Any]) -> None:
@@ -142,7 +164,7 @@ async def sava_command_stream(request: Request):
 
     async def work() -> None:
         try:
-            body, status = await _run_turn(user, payload, emit)
+            body, status = await _run_turn(user, payload, emit, token)
             await queue.put({"type": "done" if status == 200 else "error", "status": status, **body})
         except Exception:  # noqa: BLE001 - never leak a raw traceback to the canvas
             logger.exception("SAVA streamed command failed")

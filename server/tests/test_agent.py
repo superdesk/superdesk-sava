@@ -2,11 +2,10 @@
 
 import logging
 import re
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
-
 import pytest
-
-from sava import agent
+from sava import agent, shared_tools
 from sava.agent import (
     _build_pending,
     run_agent,
@@ -15,21 +14,36 @@ from sava.agent import (
     _sanitize_history,
     _trim_history,
 )
-from sava.tools.base import Tool, ToolContext, ToolResult, tool
+from sava.results import Pending, ToolResult
 
 
-# A confirmation-gated tool used by the _resolve_tool_calls tests. Registered at
-# import so it exists regardless of test order.
-@tool(
-    name="sava_test_gated",
-    description="gated",
-    parameters={"type": "object", "properties": {}},
-    requires_confirmation=True,
-    confirm_title="Sure?",
-    confirm_label="Yes",
-)
-async def _gated(args, ctx):
-    return ToolResult(ok=True, summary="ran", for_model="ran")
+class FakeToolbox:
+    """Stands in for the shared tools: ``sava_test_gated`` asks ``question`` before it acts."""
+
+    def __init__(self, question="Sure?"):
+        self.question = question
+        self.runs = []
+
+    def schemas(self):
+        return []
+
+    async def run(self, name, args, approved_question=None):
+        self.runs.append((name, approved_question))
+        if name == "sava_test_gated" and approved_question != self.question:
+            return Pending(question=self.question)
+        return ToolResult(ok=True, summary="ran", for_model="ran")
+
+
+@pytest.fixture
+def toolbox(monkeypatch):
+    fake = FakeToolbox()
+
+    @asynccontextmanager
+    async def opened(token, **_):
+        yield fake
+
+    monkeypatch.setattr(shared_tools, "toolbox", opened)
+    return fake
 
 
 def _assistant_call(call_id):
@@ -93,56 +107,55 @@ def test_trim_history_bounds_and_trims_to_user_boundary(monkeypatch):
     assert {m["content"] for m in out} == {"u2", "a2", "t", "a3"}
 
 
-def test_build_pending_links_article_to_monitoring():
-    t = Tool(
-        name="publish_article",
-        description="",
-        parameters={},
-        handler=None,
-        requires_confirmation=True,
-        confirm_title="Publish?",
-        confirm_label="Publish",
-    )
-    pending = _build_pending("tc1", t, {"article_id": "xyz"}, ToolContext())
-    assert pending["id"] == "tc1"
-    assert pending["tool"] == "publish_article"
-    assert pending["title"] == "Publish?"
-    assert pending["confirm_label"] == "Publish"
+def test_build_pending_shows_the_tools_question_and_links_the_article():
+    pending = _build_pending("tc1", "publish_item", "Publish “Budget vote”?", {"item_id": "xyz"})
+    assert (pending["id"], pending["tool"], pending["title"]) == ("tc1", "publish_item", "Publish “Budget vote”?")
+    assert pending["confirm_label"] == "Confirm"
     assert pending["links"][0]["route"].startswith("/workspace/monitoring?item=xyz")
 
 
-def test_build_pending_links_event_to_planning_with_default_title():
-    t = Tool(name="post_event", description="", parameters={}, handler=None, requires_confirmation=True)
-    pending = _build_pending("tc2", t, {"event_id": "e1"}, ToolContext())
+def test_build_pending_links_events_and_planning_to_planning():
+    pending = _build_pending("tc2", "spike_event", "Spike “Summit”?", {"event_id": "e1"})
     assert pending["links"][0] == {"label": "Open planning", "route": "/planning"}
-    assert pending["title"] == "Run post_event?"  # confirm_title None -> default
 
 
-async def test_resolve_tool_calls_pauses_on_confirmation():
+async def test_resolve_tool_calls_pauses_on_the_tools_question():
     messages = [_assistant_call("call_1")]
     actions = []
-    pending = await _resolve_tool_calls(messages, actions, ToolContext(), approved=set(), denied=set())
+    pending = await _resolve_tool_calls(messages, actions, FakeToolbox(), approved=set(), denied=set())
     assert pending is not None
-    assert pending["tool"] == "sava_test_gated"
-    assert pending["title"] == "Sure?"
-    # Nothing executed while awaiting a decision.
+    assert (pending["tool"], pending["title"]) == ("sava_test_gated", "Sure?")
+    # Nothing done while awaiting a decision.
     assert all(m["role"] != "tool" for m in messages)
     assert actions == []
 
 
-async def test_resolve_tool_calls_runs_when_approved():
+async def test_resolve_tool_calls_acts_on_a_yes_to_the_same_question():
     messages = [_assistant_call("call_2")]
     actions = []
-    pending = await _resolve_tool_calls(messages, actions, ToolContext(), approved={"call_2"}, denied=set())
+    tools = FakeToolbox()
+    asked = {"id": "call_2", "title": "Sure?"}
+    pending = await _resolve_tool_calls(messages, actions, tools, approved={"call_2"}, denied=set(), asked=asked)
     assert pending is None
+    assert tools.runs == [("sava_test_gated", "Sure?")]
     assert any(m["role"] == "tool" and m["tool_call_id"] == "call_2" for m in messages)
     assert actions and actions[0]["ok"] is True
+
+
+async def test_resolve_tool_calls_asks_again_when_the_question_changed():
+    """A yes holds for what the user saw; an item that changed since is asked about anew."""
+    messages = [_assistant_call("call_4")]
+    asked = {"id": "call_4", "title": "Spike it? (1 coverage)"}
+    tools = FakeToolbox(question="Spike it? (3 coverages)")
+    pending = await _resolve_tool_calls(messages, [], tools, approved={"call_4"}, denied=set(), asked=asked)
+    assert pending is not None and pending["title"] == "Spike it? (3 coverages)"
+    assert all(m["role"] != "tool" for m in messages)
 
 
 async def test_resolve_tool_calls_records_denial():
     messages = [_assistant_call("call_3")]
     actions = []
-    pending = await _resolve_tool_calls(messages, actions, ToolContext(), approved=set(), denied={"call_3"})
+    pending = await _resolve_tool_calls(messages, actions, FakeToolbox(), approved=set(), denied={"call_3"})
     assert pending is None
     tool_msgs = [m for m in messages if m["role"] == "tool"]
     assert tool_msgs and "declined" in tool_msgs[0]["content"].lower()
@@ -151,7 +164,7 @@ async def test_resolve_tool_calls_records_denial():
 
 async def test_resolve_tool_calls_noop_without_trailing_tool_calls():
     messages = [{"role": "assistant", "content": "just text"}]
-    pending = await _resolve_tool_calls(messages, [], ToolContext(), approved=set(), denied=set())
+    pending = await _resolve_tool_calls(messages, [], FakeToolbox(), approved=set(), denied=set())
     assert pending is None
 
 
@@ -218,12 +231,7 @@ def _well_formed(conversation):
     return True
 
 
-@tool(name="sava_test_loop_noop", description="noop", parameters={"type": "object", "properties": {}})
-async def _loop_noop(args, ctx):
-    return ToolResult(ok=True, summary="ran", for_model="ran")
-
-
-async def test_step_limit_closes_dangling_tool_calls(monkeypatch):
+async def test_step_limit_closes_dangling_tool_calls(monkeypatch, toolbox):
     monkeypatch.setenv("SAVA_OPENROUTER_API_KEY", "test")
     monkeypatch.setenv("SAVA_MAX_STEPS", "2")
     calls = []
@@ -242,7 +250,7 @@ async def test_step_limit_closes_dangling_tool_calls(monkeypatch):
     assert any(s.startswith("Not run") for s in summaries)
 
 
-async def test_new_prompt_while_pending_cancels_and_stays_well_formed(monkeypatch):
+async def test_new_prompt_while_pending_cancels_and_stays_well_formed(monkeypatch, toolbox):
     monkeypatch.setenv("SAVA_OPENROUTER_API_KEY", "test")
     monkeypatch.setenv("SAVA_MAX_STEPS", "1")
     calls = []
@@ -272,7 +280,7 @@ def _fake_text_client(text, usage):
     return SimpleNamespace(chat=SimpleNamespace(completions=_Completions()))
 
 
-async def test_turn_logs_model_usage_and_outcome(monkeypatch, caplog):
+async def test_turn_logs_model_usage_and_outcome(monkeypatch, caplog, toolbox):
     monkeypatch.setenv("SAVA_OPENROUTER_API_KEY", "test")
     usage = SimpleNamespace(prompt_tokens=4321, completion_tokens=12)
     monkeypatch.setattr(agent, "_build_client", lambda: _fake_text_client("All done.", usage))
@@ -302,20 +310,16 @@ def test_build_client_is_cached_per_endpoint(monkeypatch):
     agent._CLIENT.clear()
 
 
-# --- prompt / registry drift --------------------------------------------------
-
-# snake_case words in the prompt that are parameter values, not tool names.
-_PROMPT_NON_TOOLS = {"date_filter", "this_week", "this_month"}
+# --- prompt / tools drift -----------------------------------------------------
 
 
-def test_system_prompt_names_only_registered_tools():
-    """Every snake_case identifier the prompt tells the model to call must exist,
-    so renaming or removing a tool can't silently leave the prompt pointing at
-    nothing."""
-    from sava.tools.base import _REGISTRY
-
-    mentioned = set(re.findall(r"\b[a-z]+(?:_[a-z]+)+\b", agent.SYSTEM_PROMPT)) - _PROMPT_NON_TOOLS
-    assert mentioned <= set(_REGISTRY), sorted(mentioned - set(_REGISTRY))
+def test_system_prompt_names_only_tools_the_model_gets():
+    """Every snake_case identifier the prompt tells the model to call must be among the
+    tools it is given, so a renamed tool or a toolset left out can't leave the prompt
+    pointing at nothing."""
+    given = {schema["function"]["name"] for schema in shared_tools.schemas()}
+    mentioned = set(re.findall(r"\b[a-z]+(?:_[a-z]+)+\b", agent.SYSTEM_PROMPT))
+    assert mentioned <= given, sorted(mentioned - given)
 
 
 def test_package_logger_emits_info_in_request_log_format():
