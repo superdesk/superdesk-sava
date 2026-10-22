@@ -31,11 +31,19 @@ SAVA_MAX_HISTORY_MESSAGES = 20
 
 
 # Visible provenance tag. When set (e.g. "AI-assisted"), items SAVA creates or
-# edits also get a `subject` entry with that name so they can be seen and
-# filtered in monitoring; the structured record under `extra.sava` is always
-# written. Create a vocabulary with the scheme's id to make the tag filterable.
+# edits also get a `subject` entry with that name (scheme "ai_provenance") so they
+# can be found in monitoring; the record under `extra.ai_provenance` is always written.
 SAVA_PROVENANCE_TAG = ""
-SAVA_PROVENANCE_SCHEME = "sava"
+
+# Which superdesk-tools toolsets the model gets. Every tool's schema is sent on
+# every model call, so fewer toolsets mean faster and cheaper calls.
+SAVA_TOOLSETS = "discovery,search,authoring,workflow,publishing,planning"
+
+# Whether the tools that publish (reach subscribers) exist. They always ask first.
+SAVA_ALLOW_PUBLISH = "1"
+
+# The Superdesk API the tools call as the user. Empty: this Superdesk's SERVER_URL.
+SAVA_SUPERDESK_API_URL = ""
 
 
 # --- Resolution --------------------------------------------------------------
@@ -47,7 +55,9 @@ _DEFAULTS = {
     "SAVA_MAX_STEPS": SAVA_MAX_STEPS,
     "SAVA_MAX_HISTORY_MESSAGES": SAVA_MAX_HISTORY_MESSAGES,
     "SAVA_PROVENANCE_TAG": SAVA_PROVENANCE_TAG,
-    "SAVA_PROVENANCE_SCHEME": SAVA_PROVENANCE_SCHEME,
+    "SAVA_TOOLSETS": SAVA_TOOLSETS,
+    "SAVA_ALLOW_PUBLISH": SAVA_ALLOW_PUBLISH,
+    "SAVA_SUPERDESK_API_URL": SAVA_SUPERDESK_API_URL,
 }
 
 
@@ -79,3 +89,13 @@ def get_int_setting(name: str, minimum: int = 1) -> int:
         return max(minimum, int(get_setting(name)))
     except (TypeError, ValueError):
         return max(minimum, int(str(_DEFAULTS.get(name, minimum))))
+
+
+def instance_timezone() -> str:
+    """The instance's configured timezone name (``DEFAULT_TIMEZONE``), or UTC."""
+    try:
+        from superdesk.core import get_app_config
+
+        return get_app_config("DEFAULT_TIMEZONE") or "UTC"
+    except Exception:  # noqa: BLE001 - outside an app context
+        return "UTC"

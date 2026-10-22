@@ -1,6 +1,6 @@
 # Superdesk SAVA
 
-[![CI](https://github.com/BrianMwangi21/superdesk-sava/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/BrianMwangi21/superdesk-sava/actions/workflows/ci.yml)
+[![CI](https://github.com/superdesk/superdesk-sava/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/superdesk/superdesk-sava/actions/workflows/ci.yml)
 
 **SAVA** boils Superdesk down to a single text box. Using natural language, a user
 can ask the system to do things — *"create a text article with the headline 'Messi
@@ -27,53 +27,26 @@ superdesk-sava/
 └── server/
     └── sava/                    # pip-installable Superdesk module
         ├── agent.py             # OpenRouter agent loop + confirmation state machine
+        ├── shared_tools.py      # the tools, from superdesk-tools, run as the user
+        ├── results.py           # what a tool call shows: reply text, cards, links
         ├── views.py             # POST /sava/command endpoint
-        ├── default_settings.py
-        └── tools/               # the tool framework
-            ├── base.py          # Tool / ToolContext / ToolResult + registry
-            ├── lookups.py       # shared non-tool helpers (desks, profiles)
-            ├── desks/           # one folder per domain,
-            ├── profiles/        #   one file per atomic tool,
-            └── articles/        #   each self-registers via @tool
+        └── default_settings.py
 ```
 
 ### Tools
 
-Every tool is a self-describing, self-registering unit — drop a module under
-`tools/<domain>/` with an async handler decorated by `@tool(...)` and it appears in
-the agent's toolset with no wiring. Tools receive a `ToolContext` (current user +
-helpers like `link_to_item`) and return a `ToolResult` (`for_model` text for the
-LLM; `summary`/`links`/`data` for the UI).
+SAVA's tools come from [superdesk-tools](https://github.com/superdesk/superdesk-tools), the
+same newsroom tools the Superdesk MCP server offers. `shared_tools.py` gives the model their
+schemas and runs each call through the Superdesk API **as the logged-in user**, with the
+session the request came with: Superdesk applies that user's privileges, desk membership and
+locks exactly as in its interface.
 
-Current tools, by domain:
-- **lookups** — `list_desks`, `list_stages`, `list_content_profiles`,
-  `describe_content_profile`, `find_user`, `list_categories`, `list_coverage_types`
-- **articles (read)** — `find_articles`, `find_my_articles`, `find_desk_items`,
-  `get_article`
-- **articles (write)** — `create_article`, `update_article`, `move_article`,
-  `spike_article` ⚠️, `unspike_article`, `publish_article` ⚠️
-- **planning** — `describe_planning_profile`, `create_planning_item`, `add_coverage`,
-  `search_planning`, `spike_planning_item` ⚠️, `unspike_planning_item`,
-  `cancel_planning_item` ⚠️, `postpone_planning_item`, `reschedule_planning_item`,
-  `unpost_planning_item` ⚠️
-- **events** — `create_event`, `update_event`, `search_events`,
-  `link_event_to_planning`, `post_event` ⚠️, `unpost_event` ⚠️, `spike_event` ⚠️,
-  `unspike_event`, `cancel_event` ⚠️, `postpone_event`, `reschedule_event`,
-  `update_event_time`
-- **assignments** — `list_my_assignments`
+`SAVA_TOOLSETS` picks the toolsets (default: discovery, search, authoring, workflow,
+publishing, planning: about 70 tools). Every schema is sent on every model call, so fewer
+toolsets mean faster, cheaper calls.
 
-⚠️ = confirmation-gated (human-in-the-loop).
-
-### Self-discovery
-
-Nothing is hardcoded. The agent discovers required fields at runtime from the
-instance's own profiles — articles via `content_types`
-(`list_content_profiles` → `describe_content_profile`) and events / planning /
-coverages via `planning_types` (`describe_planning_profile`) — and asks the user
-for whatever a given profile needs. Requirements differ per deployment (Superdesk
-vs superdesk-cp vs superdesk-stt) and can change on the fly, so create tools also
-accept a generic `fields` object to carry any instance-specific field with no code
-change.
+Nothing is hardcoded: content profiles (`get_content_profile`), the languages of events
+(`get_event_languages`) and the like are read from the instance at runtime.
 
 ### Chat history
 
@@ -86,27 +59,20 @@ after installing so its Mongo index is created.
 
 ### Provenance
 
-Items SAVA creates or edits carry a record of it under `extra.sava` (the free-form
-dict articles, events and planning items share, so no schema change):
+Articles, events and planning items the tools create or edit carry a record of it under
+`extra.ai_provenance`, written by superdesk-tools with SAVA as the agent:
 
 ```json
-"extra": {"sava": {"created": true, "actions": [
-  {"tool": "create_planning_item", "at": "2026-09-01T20:14:03+00:00",
-   "model": "openai/gpt-oss-120b", "user": "<user id>", "conversation": "<chat id>"}
+"extra": {"ai_provenance": {"created": true, "actions": [
+  {"agent": "sava", "tool": "create_planning_item", "at": "2026-09-01T20:14:03+00:00",
+   "user": "<user id>", "model": "openai/gpt-oss-120b", "conversation": "<chat id>"}
 ]}}
 ```
 
-The human stays the item's creator; this only says which agent actions touched it
-and on whose behalf. Create, update, move, coverage and link tools write it.
-Workflow actions (publish, spike, post, cancel...) don't, because a published or
-spiked item can't simply be patched; the chat history records those.
-
-Set `SAVA_PROVENANCE_TAG` (e.g. `AI-assisted`) to also add a visible `subject`
-entry with that name (qcode is the slugified name, scheme `SAVA_PROVENANCE_SCHEME`,
-default `sava`) so agent-touched items can be seen and filtered in monitoring. To
-make the tag filterable, create a vocabulary whose id is the scheme containing that
-qcode. Note that `extra` (and `subject`) are part of NINJS publish output, so
-subscribers receive the provenance unless a formatter strips it.
+The human stays the item's creator. Workflow actions (publish, spike, cancel...) are not
+recorded there; the chat history keeps those. `SAVA_PROVENANCE_TAG` (e.g. `AI-assisted`) also
+adds a visible `subject` entry (scheme `ai_provenance`). Note that `extra` and `subject` are
+part of NINJS publish output, so subscribers receive the provenance unless a formatter strips it.
 
 ### Streaming
 
@@ -120,20 +86,11 @@ saves the turn. `POST /sava/command` remains for non-streaming clients.
 
 ### Human-in-the-loop
 
-Tools flagged `requires_confirmation=True` (e.g. publish) don't run immediately:
-the agent loop returns a `pending` action, the client shows an approval card
-(with a link to review the item in monitoring), and the user's decision comes back
-on the next request to resume — a real approval gate, server-enforced.
-
-### Privileges
-
-Tools call Superdesk services directly, which skips the privilege check the REST
-layer normally applies. So every write tool declares the same Superdesk privilege
-its resource requires (`@tool(..., privilege="publish")`), and `run_tool` refuses
-to run it for a user who lacks that privilege — using the same resolution as
-Superdesk itself (admins pass; otherwise role privileges merged with the user's
-own). Read-only tools declare none. A test fails the build if a non-read tool
-forgets to declare one.
+Tools that need consent (publishing, spiking, cancelling, replacing an article's text...)
+answer with a question instead of acting. The agent loop returns it as a `pending` card with
+the tool's own question, written from the item as it is now; the user's decision comes back
+on the next request. On a yes the tool is called again and acts, unless its question changed
+in the meantime, in which case the user is asked again.
 
 ### Runtime flow
 
@@ -146,12 +103,12 @@ SAVA endpoint ──► agent loop (tool calling, as the logged-in user)
       │   confirm-gated ▼
       │        returns { pending } ──► client approval card ──► decision ──► resume
       │                 │
-      └────────► Superdesk internal API (create/publish/…)
+      └────────► Superdesk API, as the user (superdesk-tools)
                  returns { reply, actions, conversation, pending }
 ```
 
-The agent never has more power than the user does — every tool call runs through
-Superdesk's normal services and privilege checks. The server is stateless: the
+The agent never has more power than the user does — every tool call goes through
+Superdesk's API with the user's own session. The server is stateless: the
 client round-trips `conversation` (memory) and resolves `pending` via `decision`.
 Deep links are host-agnostic — tools return a route, the client prepends its own
 origin.
@@ -171,6 +128,10 @@ defaults):
 | `SAVA_OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | API base |
 | `SAVA_MAX_STEPS` | `6` | max agent loop iterations per turn |
 | `SAVA_MAX_HISTORY_MESSAGES` | `20` | conversation-memory cap |
+| `SAVA_TOOLSETS` | `discovery,search,authoring,workflow,publishing,planning` | superdesk-tools toolsets the model gets |
+| `SAVA_ALLOW_PUBLISH` | `1` | whether the publishing tools exist (they always ask first) |
+| `SAVA_PROVENANCE_TAG` | *(empty)* | a subject tag for items SAVA creates or edits |
+| `SAVA_SUPERDESK_API_URL` | *(this Superdesk's `SERVER_URL`)* | the API the tools call |
 
 A client that wants a different model just sets `SAVA_MODEL`. To point SAVA at a
 model you host yourself, see [docs/SELF_HOSTED.md](docs/SELF_HOSTED.md).
@@ -182,7 +143,7 @@ user id — the raw data for any cost or latency discussion.
 ## Development
 
 This repo is referenced from the blueprint via GitHub
-(`github:BrianMwangi21/superdesk-sava#develop`), then linked locally for live edits:
+(`github:superdesk/superdesk-sava#develop`), then linked locally for live edits:
 
 ```bash
 # client
@@ -193,15 +154,17 @@ cd /path/to/superdesk-sava && npm install
 # 2. link it into the host client
 cd /path/to/superdesk/client && npx link /path/to/superdesk-sava
 
-# server (inside the right pyenv)
+# server (inside the right pyenv); superdesk-tools is private: installing needs an SSH key that reads it
 cd /path/to/superdesk/server && pip install -Ue ../../superdesk-sava
+# to work on the tools too, install them from a local checkout
+pip install -e ../../superdesk-tools
 ```
 
 ### Tests
 
-The server suite covers the deterministic core — the tool registry and execution
-safety, the agent state machine (reply cleaning, history trimming, confirmation
-gating), settings resolution, and the pure lookup helpers. It needs no running
+The server suite covers the deterministic core — the agent state machine (reply
+cleaning, history trimming, confirmation round-trips), the shared-tools adapter
+(schemas, results, cards), and settings resolution. It needs no running
 Superdesk services (the LLM and resource calls are never hit).
 
 ```bash
@@ -222,7 +185,8 @@ pytest                                 # config lives in setup.cfg
 - **Tests** — installs `superdesk-core` and `superdesk-planning` from their
   moving `develop` branches, then runs `pytest`. This is deliberate: the job
   doubles as an integration canary, so if an upstream change breaks SAVA the
-  build goes red and we find out immediately rather than during a demo.
+  build goes red and we find out immediately rather than during a demo. It needs
+  the repository secret `SUPERDESK_TOOLS_TOKEN` (read access to superdesk-tools).
 
 ## Status
 
@@ -233,4 +197,4 @@ pytest                                 # config lives in setup.cfg
 - Server-enforced approval gate for publishing, with review links.
 - Native, token-driven chat UI.
 
-Natural next tools: `find_articles`, `edit_article`, planning items + coverages.
+New tools come from superdesk-tools, so the MCP server and SAVA gain them together.

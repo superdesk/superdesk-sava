@@ -16,8 +16,9 @@ setup(
     include_package_data=True,
     install_requires=[
         "openai>=1.0,<2.0",
+        "superdesk-tools @ git+ssh://git@github.com/superdesk/superdesk-tools.git@main",
     ],
-    python_requires=">=3.9",
+    python_requires=">=3.12",
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Environment :: Plugins",

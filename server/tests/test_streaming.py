@@ -1,16 +1,40 @@
 """Streaming mode of the agent loop: event emission, tool-call reassembly, Stop."""
 
 import asyncio
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
-
-from sava import agent
+import pytest
+from sava import agent, shared_tools
 from sava.agent import _complete, run_agent
-from sava.tools.base import ToolResult, tool
+from sava.results import ToolResult
 
 
-@tool(name="sava_test_stream_noop", description="noop", parameters={"type": "object", "properties": {}})
-async def _noop(args, ctx):
-    return ToolResult(ok=True, summary="ran", for_model="ran")
+class FakeToolbox:
+    """Stands in for the shared tools; ``sava_test_slow_tool`` waits until the turn is stopped."""
+
+    def __init__(self):
+        self.started = asyncio.Event()
+
+    def schemas(self):
+        return []
+
+    async def run(self, name, args, approved_question=None):
+        if name == "sava_test_slow_tool":
+            self.started.set()
+            await asyncio.Event().wait()
+        return ToolResult(ok=True, summary="ran", for_model="ran")
+
+
+@pytest.fixture
+def toolbox(monkeypatch):
+    fake = FakeToolbox()
+
+    @asynccontextmanager
+    async def opened(token, **_):
+        yield fake
+
+    monkeypatch.setattr(shared_tools, "toolbox", opened)
+    return fake
 
 
 def _chunk(content=None, tool_calls=None, usage=None, choices=True):
@@ -64,7 +88,7 @@ async def test_complete_streams_text_and_reassembles_tool_calls():
     async def on_event(e):
         events.append(e)
 
-    content, tool_calls, got_usage = await _complete(client, "m", [], on_event, partial)
+    content, tool_calls, got_usage = await _complete(client, "m", [], on_event, partial, [])
     assert content == "Let me look."
     assert "".join(partial) == "Let me look."
     assert [e["text"] for e in events if e["type"] == "delta"] == ["Let me ", "look."]
@@ -81,11 +105,11 @@ async def test_complete_synthesises_missing_tool_call_ids():
     async def on_event(e):
         pass
 
-    _, tool_calls, _ = await _complete(client, "m", [], on_event, [])
+    _, tool_calls, _ = await _complete(client, "m", [], on_event, [], [])
     assert tool_calls[0]["id"] == "call_0"
 
 
-async def test_run_agent_streams_events_in_order(monkeypatch):
+async def test_run_agent_streams_events_in_order(monkeypatch, toolbox):
     monkeypatch.setenv("SAVA_OPENROUTER_API_KEY", "test")
     first = [
         _chunk(content="Checking"),
@@ -118,7 +142,7 @@ async def test_run_agent_streams_events_in_order(monkeypatch):
     assert result["conversation"][-1] == {"role": "assistant", "content": "All done."}
 
 
-async def test_stop_mid_reply_keeps_partial_text_and_well_formed_history(monkeypatch):
+async def test_stop_mid_reply_keeps_partial_text_and_well_formed_history(monkeypatch, toolbox):
     monkeypatch.setenv("SAVA_OPENROUTER_API_KEY", "test")
 
     class _Hanging:
@@ -159,15 +183,9 @@ async def test_stop_mid_reply_keeps_partial_text_and_well_formed_history(monkeyp
     assert result["conversation"][-1] == {"role": "assistant", "content": "Partial answer"}
 
 
-async def test_stop_while_tool_runs_closes_the_dangling_call(monkeypatch):
+async def test_stop_while_tool_runs_closes_the_dangling_call(monkeypatch, toolbox):
     monkeypatch.setenv("SAVA_OPENROUTER_API_KEY", "test")
-    started = asyncio.Event()
-
-    @tool(name="sava_test_slow_tool", description="slow", parameters={"type": "object", "properties": {}})
-    async def _slow(args, ctx):
-        started.set()
-        await asyncio.Event().wait()
-        return ToolResult(ok=True, summary="never", for_model="never")
+    started = toolbox.started
 
     client, _ = _streaming_client(
         [[_chunk(tool_calls=[_frag(0, id="c1", name="sava_test_slow_tool", arguments="{}")])]]
