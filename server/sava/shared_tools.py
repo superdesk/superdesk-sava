@@ -113,7 +113,7 @@ class Toolbox:
         warnings = [str(warning) for warning in data.get("warnings") or []]
         return ToolResult(
             ok=True,
-            summary=str(data.get("summary") or _counted(name, data)),
+            summary=str(data.get("summary") or _described(name, data)),
             detail="; ".join(warnings) or None,
             for_model=json.dumps(data, ensure_ascii=False, default=str),
             links=_links(data),
@@ -201,10 +201,17 @@ def _links(data: Dict[str, Any]) -> List[ToolLink]:
     return [ToolLink(label="Open in monitoring", route=_article_route(data["id"]))]
 
 
-def _counted(name: str, data: Dict[str, Any]) -> str:
-    for key in ("items", "entries", "assignments"):
-        if isinstance(data.get(key), list):
-            return f"Found {len(data[key])}"
+# How a list in a result is named in the activity log, where its key does not say it well
+LIST_NAMES = {"entries": "events and planning items", "items": "items"}
+
+
+def _described(name: str, data: Dict[str, Any]) -> str:
+    """A line for the activity log when the result has no summary of its own: what was found, or who."""
+    if name == "whoami" and (data.get("display_name") or data.get("username")):
+        return f"Signed in as {data.get('display_name') or data.get('username')}"
+    for key, value in data.items():
+        if isinstance(value, list):
+            return f"Found {len(value)} {LIST_NAMES.get(key, key.replace('_', ' '))}"
     return name.replace("_", " ").capitalize()
 
 

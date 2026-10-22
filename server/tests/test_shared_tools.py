@@ -75,7 +75,7 @@ async def test_search_results_come_back_as_cards_with_desk_names(mocked):
     async with shared_tools.toolbox("token") as tools:
         result = await tools.run("search_content", {"text": "budget"})
 
-    assert result.ok and result.summary.startswith("Found 1")
+    assert result.ok and result.summary == "Found 1 items"
     [card] = result.items
     assert (card.kind, card.id, card.title, card.desk) == ("article", "item-1", "Budget vote", "Politics")
     assert card.route == "/workspace/monitoring?item=item-1&action=edit"
@@ -165,3 +165,16 @@ async def test_the_client_knows_the_session_and_the_user():
     async with shared_tools.toolbox("token", session_id="session-1", user_id="u1") as tools:
         client = tools._client
         assert (await client.session_id(), await client.user_id()) == ("session-1", "u1")
+
+
+@pytest.mark.parametrize(
+    "name, data, line",
+    [
+        ("whoami", {"username": "admin", "display_name": "Jane Doe"}, "Signed in as Jane Doe"),
+        ("list_desks", {"desks": [{}, {}, {}]}, "Found 3 desks"),
+        ("search_events_and_planning", {"entries": [{}], "page": 1}, "Found 1 events and planning items"),
+        ("get_vocabulary", {"id": "x"}, "Get vocabulary"),
+    ],
+)
+def test_the_activity_log_says_what_was_found(name, data, line):
+    assert shared_tools._described(name, data) == line
