@@ -53,6 +53,8 @@ unspike_item take it out of and back into the workflow; publish_item publishes i
 Planning, events & assignments:
 - search_events_and_planning finds events and planning items; get_event and \
 get_planning_item read one.
+- Before creating an event or a planning item, list_planning_profiles says what this \
+newsroom requires of one; ask the user for anything required they haven't given.
 - create_event and update_event write events. Where events are multilingual, call \
 get_event_languages first: it says which languages and fields the newsroom uses. Give the \
 main language's texts in the normal arguments and the others in translations.

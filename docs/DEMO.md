@@ -41,7 +41,7 @@ Each step: **type this** → *what fires* → **point this out**.
 
 ### 4. Runtime discovery for planning (the "pluggable" story)
 **Type:** `What's required to create an event here?`
-*Fires:* `describe_planning_profile`
+*Fires:* `list_planning_profiles`
 **Point out:** requirements come from the instance's `planning_types` — on
 superdesk-cp or superdesk-stt this returns *their* rules with zero code change.
 
