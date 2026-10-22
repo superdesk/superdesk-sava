@@ -174,8 +174,25 @@ async def test_the_client_knows_the_session_and_the_user():
         ("list_desks", {"desks": [{}, {}, {}]}, "Found 3 desks"),
         ("search_events_and_planning", {"entries": [{}], "page": 1}, "Found 1 events and planning items"),
         ("get_vocabulary", {"id": "x"}, "Get vocabulary"),
+        ("validate_item", {"id": "i1", "action": "publish", "ready": True, "problems": []}, "Ready to publish"),
+        (
+            "validate_item",
+            {"id": "i1", "action": "correct", "ready": False, "problems": ["headline is required", "too long"]},
+            "Not ready to correct: 2 problem(s)",
+        ),
         ("get_planning_item", {"id": "pl1", "calendars": [], "coverages": [{}]}, "Get planning item"),
     ],
 )
 def test_the_activity_log_says_what_was_found(name, data, line):
     assert shared_tools._described(name, data) == line
+
+
+async def test_what_stands_in_the_way_of_publishing_is_shown_with_the_check(mocked):
+    mocked.get(matching("archive/item-1"), payload={**ITEM, "headline": ""}, repeat=True)
+    mocked.post(matching("validate"), payload={"errors": ["HEADLINE is a required field"]}, repeat=True)
+
+    async with shared_tools.toolbox("token") as tools:
+        result = await tools.run("validate_item", {"item_id": "item-1"})
+
+    assert result.summary == "Not ready to publish: 1 problem(s)"
+    assert "HEADLINE is a required field" in result.detail
