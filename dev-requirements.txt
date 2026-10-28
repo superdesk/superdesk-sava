@@ -1,6 +1,6 @@
 # Server-side developer tooling (formatting, linting, type checking, tests).
 # Matches the standards used across the other Superdesk repos.
-black==24.10.0
+black==26.10.1
 flake8==7.1.1
 mypy==1.19.1
 pytest==9.1.0
